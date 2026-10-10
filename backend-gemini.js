@@ -43,6 +43,7 @@
   let lang = LANG[load("saurus.language", "")] ? load("saurus.language", "fr") : (LANG[cfg.language] ? cfg.language : "de");
   const struggles = { fr: [], de: [], es: [], sv: [] }; // [{word, note, misses}], most missed first
   const marked = new Set(); // target-language words the last translations marked on the page
+  const nextAction = { fr: null, de: null, es: null, sv: null }; // from saurus_next_action
 
   // Supabase (hosted, see supabase-config.js): level per language and
   // struggle words, through three database functions (supabase/migrations).
@@ -74,25 +75,48 @@
     const m = await rpc("saurus_memory", { p_learner: LEARNER, p_language: code });
     if (m && m.level) levels[code] = Math.max(1, Math.min(4, Number(m.level) || 1));
     struggles[code] = Array.isArray(m && m.struggles) ? m.struggles : [];
+    nextAction[code] = (m && m.next) || null;
   }
   function saveLevel(code, lv) {
     save("saurus.levels", levels);
     if (memoryOn) rpc("saurus_set_level", { p_learner: LEARNER, p_language: code, p_level: lv }).catch(memoryProblem);
   }
-  function logStruggle(word, note) {
+  // Record a right or wrong answer about a word. Supabase replies with what
+  // to practise next (saurus_next_action), which goes back to Gemini.
+  async function logAnswer(word, correct, note) {
     const w = String(word || "").trim().slice(0, 80);
-    if (!w) return;
+    if (!w) return "no word given";
     const list = struggles[lang];
     const hit = list.find((x) => x.word.toLowerCase() === w.toLowerCase());
-    if (hit) hit.misses++; else list.unshift({ word: w, note: note || null, misses: 1 });
-    if (memoryOn) rpc("saurus_log_struggle", { p_learner: LEARNER, p_language: lang, p_word: w, p_note: note ? String(note).slice(0, 200) : null }).catch(memoryProblem);
+    if (hit) { if (correct) hit.correct = (hit.correct || 0) + 1; else hit.misses++; }
+    else if (!correct) list.unshift({ word: w, note: note || null, misses: 1, correct: 0 });
+    if (!memoryOn) return "noted";
+    try {
+      const next = await rpc("saurus_log_answer", {
+        p_learner: LEARNER, p_language: lang, p_word: w, p_correct: !!correct,
+        p_note: note ? String(note).slice(0, 200) : null,
+      });
+      nextAction[lang] = next;
+      return `saved. ${describeNext(next)}`;
+    } catch (e) {
+      memoryProblem(e);
+      return "noted (memory offline)";
+    }
+  }
+  function describeNext(next) {
+    if (!next) return "";
+    const tally = `${next.learned || 0} words learned, ${next.struggling || 0} still being learned.`;
+    return next.type === "recall"
+      ? `Next, check whether they know "${next.word}"${next.note ? ` (${next.note})` : ""}. ${tally}`
+      : `Nothing left to recall: continue with the page. ${tally}`;
   }
   function struggleNote(code) {
     const list = struggles[code].slice(0, 8);
     if (!list.length) return "";
     return "Words this learner got wrong or looked up before (most missed first): " +
       list.map((x) => `${x.word}${x.note ? ` (${x.note})` : ""}${x.misses > 1 ? ` ×${x.misses}` : ""}`).join("; ") +
-      ". Early on, bring one of them back naturally and check they know it now; highlight it if it is on the page.";
+      ". Early on, bring one of them back naturally and check they know it now; highlight it if it is on the page." +
+      (nextAction[code] ? ` Practice plan from memory: ${describeNext(nextAction[code])}` : "");
   }
 
   // ---------------------------------------------------------------------
@@ -135,6 +159,8 @@
       { name: "level_down", description: "Lower the learner's level when they are clearly struggling or ask for easier." },
       { name: "log_struggle", description: "Remember a word or form the learner got wrong or did not know, so it can be practised in later sessions. Call it every time that happens.",
         parameters: { type: "OBJECT", properties: { word: { type: "STRING", description: "The target-language word or short phrase" }, note: { type: "STRING", description: "What went wrong, in a few words" } }, required: ["word"] } },
+      { name: "log_answer", description: "After you check whether the learner knows a word (a recall question, a drill question), report whether they got it right. The result tells you what to practise next: follow it.",
+        parameters: { type: "OBJECT", properties: { word: { type: "STRING", description: "The target-language word you checked" }, correct: { type: "BOOLEAN", description: "Did they get it right?" }, note: { type: "STRING", description: "What went wrong, if anything" } }, required: ["word", "correct"] } },
       { name: "offer_drill", description: "Offer a short five-minute drill when the learner keeps making the same kind of mistake.",
         parameters: { type: "OBJECT", properties: { topic: { type: "STRING", description: "What the drill practices, in a few words" } }, required: ["topic"] } },
     ],
@@ -152,7 +178,7 @@
       `Their ${LANG[lang]} level is ${levels[lang]} of 4: ${LEVEL[levels[lang]]}. Speak ${LANG[lang]} at exactly that level.`,
       "Talk about the substance of the page they are reading (the argument, what was decided, what they think), never textbook filler.",
       "Keep each turn short: one to three sentences, usually ending with one question. Correct mistakes gently by repeating the correct form.",
-      "Use your tools silently while you talk: highlight words on the page you discuss or the learner struggles with; log_struggle whenever they get a word wrong or don't know it; celebrate correct answers; level_up or level_down when their level clearly changes; offer_drill when the same mistake repeats.",
+      "Use your tools silently while you talk: highlight words on the page you discuss or the learner struggles with; log_struggle whenever they get a word wrong or don't know it; log_answer after every recall or drill question, then follow the plan it returns; celebrate correct answers; level_up or level_down when their level clearly changes; offer_drill when the same mistake repeats.",
       struggleNote(lang),
       "If the learner switches language or asks for easier/harder, follow them.",
       `The page (${page.url}):\n"""\n${page.text.slice(0, 8000)}\n"""`,
@@ -252,20 +278,21 @@
       }
     }
     if (msg.toolCall && msg.toolCall.functionCalls) {
-      const responses = msg.toolCall.functionCalls.map((fc) => ({
-        id: fc.id, name: fc.name, response: { result: runTool(fc.name, fc.args || {}) },
-      }));
-      send({ toolResponse: { functionResponses: responses } });
+      const sock = ws;
+      Promise.all(msg.toolCall.functionCalls.map(async (fc) => ({
+        id: fc.id, name: fc.name, response: { result: await runTool(fc.name, fc.args || {}) },
+      }))).then((responses) => { if (ws === sock) send({ toolResponse: { functionResponses: responses } }); });
     }
   }
 
-  function runTool(name, args) {
+  async function runTool(name, args) {
     switch (name) {
       case "highlight": emit("highlight", { text: String(args.text || "") }); return "highlighted";
       case "celebrate": emit("celebrate"); return "celebrated";
       case "level_up": return changeLevel(+1);
       case "level_down": return changeLevel(-1);
-      case "log_struggle": logStruggle(args.word, args.note); return "remembered";
+      case "log_struggle": return logAnswer(args.word, false, args.note);
+      case "log_answer": return logAnswer(args.word, !!args.correct, args.note);
       case "offer_drill": emit("drill_offer", { topic: String(args.topic || "this page") }); return "offered; wait for the learner's answer";
       default: return "unknown tool";
     }
@@ -348,7 +375,8 @@
         throw e;
       }
       if (!running) { close(); throw new Error("stopped"); }
-      const old = struggles[lang][0];
+      const nx = nextAction[lang];
+      const old = nx && nx.type === "recall" ? { word: nx.word } : struggles[lang][0];
       say(old
         ? `(I just opened you on this page. Greet me in one short sentence, then remind me of "${old.word}", which I got wrong last time, and check I know it now, ideally using the page.)`
         : "(I just opened you on this page. Greet me in one short sentence and ask me one question about what I'm reading.)");
@@ -399,7 +427,7 @@
     sendContext(ctx) {
       if (!live || !ctx || ctx.type !== "word_pressed") return;
       if (speaking) finishSaurus(true);
-      if (marked.has(String(ctx.word).toLowerCase())) logStruggle(ctx.word, "looked up"); // only target-language words
+      if (marked.has(String(ctx.word).toLowerCase())) logAnswer(ctx.word, false, "looked up"); // only target-language words
       say(`(I pressed the word "${ctx.word}" in this sentence: "${ctx.sentence}". Explain briefly what it means here, in ${LANG[lang]} at my level, then ask me to use it.)`);
       setState("thinking");
     },
@@ -441,7 +469,8 @@
         if (live) say(`(My ${LANG[lang]} ${r}. Adapt to it from now on.)`, false);
       },
       drillOffer() {
-        const topic = "the words on this page";
+        const due = struggles[lang].slice(0, 3).map((x) => x.word);
+        const topic = due.length ? due.join(", ") : "the words on this page";
         emit("drill_offer", { topic });
         if (live) say(`(You just offered me a five-minute drill on ${topic}. If I say yes, run it: one short question at a time, wait for my answer, celebrate correct answers.)`, false);
       },
