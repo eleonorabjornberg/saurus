@@ -96,12 +96,12 @@
   const TOKENS_LIGHT = `--bg:#EEF3EC; --surface:#FFFFFF; --fg:#14251C; --muted:#56695D; --line:#C9D6CC;
     --accent:#1F7A4D; --accent-ink:#FFFFFF; --belly:#BFE3CB; --mark:#FFDD55; --mark-ink:#2A2200;
     --dino:#8CC8F2; --dino-line:#2D5E9E; --dino-spot:#5D9FDB;
-    --glass:rgba(255,255,255,.74); --glass-u:rgba(240,246,250,.82); --glass-edge:rgba(255,255,255,.7); --glass-shadow:rgba(20,37,60,.22);
+    --glass:rgba(255,255,255,.94); --glass-u:rgba(242,247,251,.96); --glass-edge:rgba(255,255,255,.7); --glass-shadow:rgba(20,37,60,.22);
     --beret:#C8322B; --bread:#D9A24A; --shell:#FFFDF6; --puff:#FFFFFF; --leder:#7A4A21; --hat:#2F5D3A; --dress:#D0312D; --fan:#F2C94C;`;
   const TOKENS_DARK = `--bg:#0F1A14; --surface:#18271F; --fg:#E6EFE8; --muted:#9DB3A5; --line:#2C4035;
     --accent:#5FD08F; --accent-ink:#06170D; --belly:#1F5A3A; --mark:#E8C63A; --mark-ink:#1C1700;
     --dino:#8CC8F2; --dino-line:#2D5E9E; --dino-spot:#5D9FDB;
-    --glass:rgba(30,36,44,.72); --glass-u:rgba(40,48,58,.8); --glass-edge:rgba(255,255,255,.12); --glass-shadow:rgba(0,0,0,.45);
+    --glass:rgba(30,36,44,.94); --glass-u:rgba(40,48,58,.96); --glass-edge:rgba(255,255,255,.12); --glass-shadow:rgba(0,0,0,.45);
     --beret:#E2554D; --bread:#E0B060; --shell:#F3F0E4; --puff:#DCE8DF; --leder:#A66A35; --hat:#3F7A4E; --dress:#E2554D; --fan:#F2C94C;`;
 
   const CSS = `
@@ -846,39 +846,59 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     return frag;
   }
 
+  // Translate in small batches, what's on screen first, and show each batch
+  // as soon as it arrives (long pages would otherwise sit grey for ages).
+  const BATCH = 8, PARALLEL = 3, MAX_BLOCKS = 150;
   function translateAll() {
     if (!active || !lang || !blocks.length) return;
     const my = ++trToken;
-    for (const b of blocks) b.el.classList.add("saurus-pending");
-    callAsync("translatePage", { blocks: blocks.map(({ id, text }) => ({ id, text })), language: lang, level })
-      .then((res) => {
-        if (my !== trToken || !active) return;
-        if (!Array.isArray(res)) throw new Error("translatePage() did not return an array");
-        clearHighlights();
-        for (const item of res) {
-          const b = item && byId.get(item.id);
-          if (!b || typeof item.html !== "string") continue;
-          if (!b.tr) {
-            b.orig = document.createElement("span");
-            b.orig.className = "saurus-orig";
-            b.orig.hidden = true;
-            b.orig.append(...b.el.childNodes);
-            b.tr = document.createElement("span");
-            b.tr.className = "saurus-tr";
-            b.el.append(b.tr, b.orig);
-          }
-          b.tr.replaceChildren(htmlToFragment(item.html));
+    const vh = window.innerHeight;
+    const dist = (b) => {
+      const r = b.el.getBoundingClientRect();
+      return r.bottom < 0 ? -r.bottom + vh : r.top > vh ? r.top - vh : 0; // 0 = on screen
+    };
+    const order = blocks.map((b, i) => ({ b, d: dist(b), i }))
+      .sort((x, y) => x.d - y.d || x.i - y.i).slice(0, MAX_BLOCKS).map((x) => x.b);
+    const queue = [];
+    for (let i = 0; i < order.length; i += BATCH) queue.push(order.slice(i, i + BATCH));
+    clearHighlights();
+    for (const b of order) b.el.classList.add("saurus-pending");
+    let failed = false;
+    const apply = (res) => {
+      if (!Array.isArray(res)) throw new Error("translatePage() did not return an array");
+      for (const item of res) {
+        const b = item && byId.get(item.id);
+        if (!b || typeof item.html !== "string") continue;
+        if (!b.tr) {
+          b.orig = document.createElement("span");
+          b.orig.className = "saurus-orig";
+          b.orig.hidden = true;
+          b.orig.append(...b.el.childNodes);
+          b.tr = document.createElement("span");
+          b.tr.className = "saurus-tr";
+          b.el.append(b.tr, b.orig);
         }
-        translated = true;
-      })
-      .catch((err) => {
-        if (my !== trToken || !active) return;
-        problem(`I couldn't translate this page: ${errText(err)}.`);
-      })
-      .finally(() => {
-        if (my !== trToken) return;
-        for (const b of blocks) b.el.classList.remove("saurus-pending");
-      });
+        b.tr.replaceChildren(htmlToFragment(item.html));
+        b.el.classList.remove("saurus-pending");
+      }
+      translated = true;
+    };
+    const worker = async () => {
+      while (queue.length && my === trToken && active) {
+        const batch = queue.shift();
+        try {
+          const res = await callAsync("translatePage", { blocks: batch.map(({ id, text }) => ({ id, text })), language: lang, level });
+          if (my !== trToken || !active) return;
+          apply(res);
+        } catch (err) {
+          if (my !== trToken || !active) return;
+          if (!failed) { failed = true; problem(`I couldn't translate part of this page: ${errText(err)}.`); }
+        } finally {
+          for (const b of batch) b.el.classList.remove("saurus-pending");
+        }
+      }
+    };
+    for (let i = 0; i < PARALLEL; i++) worker();
   }
 
   let retranslateTimer = 0;
