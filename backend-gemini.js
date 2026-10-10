@@ -688,7 +688,10 @@
       page = { url: String(pageUrl || ""), text: String(pageText || "") };
       // Docs, Slides and web apps have little readable text in the page:
       // read a screenshot of the tab instead (taken by the extension).
-      const seeing = snapshot ? readScreen(snapshot).then((t) => { if (t) page.text = t; }, (e) => console.warn("[saurus-gemini] snapshot:", e)) : null;
+      const seeing = snapshot ? readScreen(snapshot).then((t) => { if (t) page.text = t; }, (e) => {
+        console.warn("[saurus-gemini] snapshot:", e);
+        emit("transcript", { who: "saurus", text: `(I couldn't read your screen: ${e.message}.)`, final: true });
+      }) : null;
       talking = false; inText = ""; outText = ""; speaking = false;
       history.length = 0; reconnects = 0; summarisedAt = 0; resumeHandle = null;
       setState("thinking");

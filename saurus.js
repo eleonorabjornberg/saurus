@@ -1287,14 +1287,22 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     const pageText = blocks.map((b) => b.text).join("\n").slice(0, 20000);
     // Little readable text (Docs, Slides, web apps): send a screenshot of
     // the tab instead, so Saurus still knows what you're looking at.
-    const snap = inExtension() && pageText.length < 500 ? snapshotTab() : Promise.resolve(null);
-    snap.then((snapshot) => callAsync("start", { pageUrl: location.href, pageText, snapshot }))
+    // Google Docs, Slides and Sheets draw their text on a canvas (the page
+    // text is only menus and sidebars), so always look at the screen there.
+    const canvasApp = /^docs\.google\.com$/.test(location.hostname) && /^\/(document|presentation|spreadsheets)\//.test(location.pathname);
+    const snap = inExtension() && (canvasApp || pageText.length < 500) ? snapshotTab() : Promise.resolve(null);
+    snap.then((snapshot) => {
+      if (canvasApp && !snapshot && my === session) {
+        addBubble("s", "(I can't see this document: reload Saurus in chrome://extensions and allow access to all sites, then refresh this tab.)");
+      }
+      return callAsync("start", { pageUrl: location.href, pageText: canvasApp && snapshot ? "" : pageText, snapshot });
+    })
       .then((info) => {
         if (my !== session) return;
         lang = (info && info.language) || "fr";
         level = Math.max(1, Math.min(4, Number(info && info.level) || 1));
         if (lang !== shownLang || level !== shownLevel) puffSwap(() => { shownLang = lang; shownLevel = level; renderArt(); });
-        translateAll();
+        if (!canvasApp) translateAll(); // the text there is on a canvas; only menus would change
       })
       .catch((err) => {
         if (my !== session) return;
