@@ -12,6 +12,6 @@
  */
 window.SAURUS_SUPABASE = {
   url: "https://hwsiplosbvlsktxxsmxd.supabase.co",
-  anonKey: "",      // "sb_publishable_..." or the legacy "eyJ..." anon key
+  anonKey: "sb_publishable_TAps0Sn1VMTxIZAKK3tQVg_t_iBGLcL",
   learner: "demo",  // whose memory to use (one shared demo learner)
 };
