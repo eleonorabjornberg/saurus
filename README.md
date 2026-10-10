@@ -1,9 +1,59 @@
 # Saurus
 
-A language-learning tutor that lives in the browser as a small floating
-avatar. This repo is the **front end**: it runs fully on its own against a
-mock backend, and talks to the real backend through one object,
-`window.SaurusBackend`.
+**A patient, fluent friend who lives in your browser, knows what you're
+reading, remembers what you get wrong, and meets you where you're at.**
+
+**Live demo:** https://eleonorabjornberg.github.io/saurus/ (open it, press
+**Alt+S**, or ⌥S on a Mac)
+
+## The user and the problem
+
+People preparing for something real, like a language exam, a move abroad or a
+new job, need to *speak* the language about things they actually care about.
+Apps stay too basic, you never hold a real conversation, and private lessons
+cost a fortune. Meanwhile hours go into reading news, newsletters and work
+documents in your own language: dead time that could be practice.
+
+This started with SIELE (Spanish exam) prep: switching every AI tool to
+Spanish, having Gemini Live quiz me on exam topics. It worked, but nothing
+remembered my mistakes or knew what I was reading.
+
+## What Saurus does
+
+Press a shortcut on any page and a small dino appears.
+
+1. **Translates the page you're reading, at your level.** A beginner sees a
+   few key words swapped in; the share grows until the page is fully in
+   the target language. The original is always one press away.
+2. **Talks with you about it.** Push-to-talk voice (or typing when muted).
+   It speaks first, asks about the substance of the page, and answers in
+   the target language at your level.
+3. **Press any word** and it explains it in context; it highlights the
+   words you struggle with.
+4. **Remembers you** per language: level, struggle words, last session. It
+   suggests a short drill when the same mistake repeats.
+5. **Grows with you.** The avatar's age *is* your level (hatchling,
+   juvenile, adult, elder), and it changes costume per language: beret and
+   baguette for French, lederhosen for German, flamenco dress and fan for
+   Spanish.
+
+No new app, no lessons to schedule: it rides along with what you already read.
+
+## How it's built
+
+- **Front end (this repo):** one plain-JavaScript file, `saurus.js`, injected
+  into any page in a shadow DOM, as a Chrome extension (Manifest V3) or a
+  `<script>` tag. It handles mic capture (16 kHz PCM), gapless playback (24 kHz
+  PCM), in-place translation, highlights and avatar states.
+- **Agent:** Gemini Live for real-time voice with built-in transcripts of
+  both sides, calling tools while it talks (highlight a word, log a
+  struggle, level up). Gemini Flash with structured output picks which
+  words to swap for the page translation.
+- **Memory:** Supabase stores level, struggle words and session summaries
+  per language.
+- The front end talks to the backend only through `window.SaurusBackend`
+  (interface below). `backend-mock.js` implements it offline with scripted
+  replies, which is what the live demo runs on.
 
 | File | What it is |
 |---|---|
@@ -14,7 +64,7 @@ mock backend, and talks to the real backend through one object,
 | `manifest.json` | Chrome extension (Manifest V3) that injects both as content scripts. |
 | `assets/` | Optional avatar art: `saurus-{fr,de,es}-{1..4}.png`. Missing files fall back to the built-in SVG. |
 
-## Run it
+## Run it locally
 
 ```sh
 python3 -m http.server 8000
