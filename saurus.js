@@ -597,6 +597,18 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // In the extension, record through the offscreen page (background.js) so
   // Chrome asks for the microphone once for all sites, not once per site.
   let micPort = null, micReady = false, micWait = null;
+  function snapshotTab() {
+    return new Promise((resolve) => {
+      const t = setTimeout(() => resolve(null), 2000);
+      try {
+        chrome.runtime.sendMessage({ target: "background", type: "snapshot" }, (r) => {
+          void chrome.runtime.lastError;
+          clearTimeout(t);
+          resolve(r && r.dataUrl ? r.dataUrl : null);
+        });
+      } catch (_) { clearTimeout(t); resolve(null); }
+    });
+  }
   function inExtension() {
     try { return !!(typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id && chrome.runtime.connect); } catch (_) { return false; }
   }
@@ -728,7 +740,8 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   function warmArt(l, lv) {
     for (const sfx of ["", "-blink", "-talk"]) pngExists(assetUrl(`assets/saurus-${l}-${lv}${sfx}.png`));
   }
-  if (look) warmArt(look.lang, look.level);
+  const START_LANG = LANG_NAME[(window.SAURUS_CONFIG || {}).language] ? window.SAURUS_CONFIG.language : "de";
+  warmArt(look ? look.lang : START_LANG, look ? look.level : 1);
 
   let artToken = 0;
   function renderArt() {
@@ -738,27 +751,31 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     const who = l ? `${LANG_NAME[l]} · ${LEVEL_NAME[lv]}` : "Waking up…";
     ui.wrap.title = who;
     ui.wrap.setAttribute("aria-label", `Saurus, ${who}`);
-    if (!l) { setHTML(ui.art, avatarSVG(l, lv)); return; }
-    rememberLook(l, lv);
-    // Optional frames next to the base art: -blink (eyes closed), -talk (mouth open).
-    const url = (suffix) => assetUrl(`assets/saurus-${l}-${lv}${suffix}.png`);
-    // Keep the current picture until the new one is ready; the drawn
-    // fallback only shows if there is no picture for this language and age.
-    Promise.all(["", "-blink", "-talk"].map((sfx) => pngExists(url(sfx)))).then(([base, blink, talk]) => {
-      if (my !== artToken) return;
-      if (!base) { setHTML(ui.art, avatarSVG(l, lv)); return; }
-      const frame = (sfx, cls) => {
-        const img = document.createElement("img");
-        img.src = url(sfx);
-        img.alt = "";
-        img.draggable = false;
-        img.className = cls;
-        return img;
-      };
-      ui.art.replaceChildren(frame("", "f-base"),
-        ...(blink ? [frame("-blink", "f-blink")] : []),
-        ...(talk ? [frame("-talk", "f-talk")] : []));
-    });
+    if (l) rememberLook(l, lv);
+    // Pictures: assets/saurus-{lang}-{age}.png, with optional -blink (eyes
+    // closed) and -talk (mouth open) frames. Without one, the plain Saurus
+    // (assets/saurus-plain.png); the drawn pet only if that is missing too.
+    // The current picture stays until the new one is ready.
+    const pick = (name) => Promise.all(["", "-blink", "-talk"].map((sfx) => pngExists(assetUrl(`assets/${name}${sfx}.png`))))
+      .then((has) => (has[0] ? { name, has } : null));
+    (l ? pick(`saurus-${l}-${lv}`) : Promise.resolve(null))
+      .then((art) => art || pick("saurus-plain"))
+      .then((art) => {
+        if (my !== artToken) return;
+        if (!art) { setHTML(ui.art, avatarSVG(l, lv)); return; }
+        const frame = (sfx, cls) => {
+          const img = document.createElement("img");
+          img.src = assetUrl(`assets/${art.name}${sfx}.png`);
+          img.alt = "";
+          img.draggable = false;
+          img.className = cls;
+          return img;
+        };
+        const [, blink, talk] = art.has;
+        ui.art.replaceChildren(frame("", "f-base"),
+          ...(blink ? [frame("-blink", "f-blink")] : []),
+          ...(talk ? [frame("-talk", "f-talk")] : []));
+      });
   }
 
   let puffTimers = [];
@@ -1214,7 +1231,9 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     live.s = live.u = null;
     lang = null;
     level = 1;
-    shownLang = look ? look.lang : null;
+    // Last pet shown, else the default language's hatchling (never the
+    // drawn placeholder while a picture exists).
+    shownLang = look ? look.lang : START_LANG;
     shownLevel = look ? look.level : 1;
     setAvatarState("idle");
     setMuted(muted);
@@ -1234,7 +1253,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
 
     collectBlocks();
     const pageText = blocks.map((b) => b.text).join("\n").slice(0, 20000);
-    callAsync("start", { pageUrl: location.href, pageText })
+    // Little readable text (Docs, Slides, web apps): send a screenshot of
+    // the tab instead, so Saurus still knows what you're looking at.
+    const snap = inExtension() && pageText.length < 500 ? snapshotTab() : Promise.resolve(null);
+    snap.then((snapshot) => callAsync("start", { pageUrl: location.href, pageText, snapshot }))
       .then((info) => {
         if (my !== session) return;
         lang = (info && info.language) || "fr";

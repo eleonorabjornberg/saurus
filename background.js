@@ -59,6 +59,16 @@ chrome.runtime.onConnect.addListener((port) => {
   });
 });
 
+// A screenshot of the tab Saurus was opened in (for Docs, Slides and web
+// apps, whose text isn't readable from the page). Only the visible tab.
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || msg.target !== "background" || msg.type !== "snapshot") return;
+  if (!sender.tab || !sender.tab.active) { sendResponse({}); return; }
+  chrome.tabs.captureVisibleTab(sender.tab.windowId, { format: "jpeg", quality: 60 })
+    .then((dataUrl) => sendResponse({ dataUrl }), () => sendResponse({}));
+  return true; // async response
+});
+
 // Audio chunks from the offscreen page go to the tab that is talking.
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.target === "background" && msg.type === "chunk" && talker) {
