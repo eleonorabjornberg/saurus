@@ -32,6 +32,7 @@
   .try button.go{background:#1F7A4D;border-color:#1F7A4D;color:#fff;font-weight:700}
   .try .sep{width:1px;height:20px;background:var(--line)}
   .try .hint{color:var(--muted)}
+  .try .bm{background:#2D5E9E;color:#fff;border-radius:999px;padding:6px 12px;font-weight:700;text-decoration:none;cursor:grab}
 </style>
 </head>
 <body>
@@ -47,6 +48,9 @@
   <button type="button" data-key="ArrowDown" aria-label="Level down">Level −</button>
   <button type="button" data-key="ArrowUp" aria-label="Level up">Level +</button>
   <span class="hint">Then hold 🎙 and talk, or tap a word.</span>
+  <span class="sep"></span>
+  <a class="bm" href="javascript:(function(){var s=document.createElement('script');s.src='https://eleonorabjornberg.github.io/saurus/bookmarklet.js?'+Date.now();document.body.appendChild(s)})()" title="Drag me to your bookmarks bar, then click it on any article">🦕 Saurus anywhere</a>
+  <span class="hint">← drag to your bookmarks bar, click it on any article</span>
 </div>
 <header class="site">
   <span class="logo">The Ledger</span>
