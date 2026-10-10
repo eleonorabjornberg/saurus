@@ -67,9 +67,17 @@ function release() {
   stream = ctx = proc = ds = opening = null;
 }
 
+// Let go of the microphone (and Chrome's orange indicator) when push-to-talk
+// hasn't been used for a while, even if the "release" message never comes
+// (e.g. the background worker went idle and dropped the tab's connection).
+const IDLE_MS = 15000;
+let idleTimer = 0;
+function releaseLater() { clearTimeout(idleTimer); idleTimer = setTimeout(release, IDLE_MS); }
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || msg.target !== "offscreen") return;
   if (msg.type === "start") {
+    clearTimeout(idleTimer);
     open().then(async () => {
       if (ctx.state === "suspended") await ctx.resume().catch(() => {});
       ds = new Downsampler(ctx.sampleRate, 16000);
@@ -81,6 +89,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     });
     return true; // async response
   }
-  if (msg.type === "stop") { sending = false; sendResponse({ ok: true }); }
-  if (msg.type === "release") { release(); sendResponse({ ok: true }); }
+  if (msg.type === "stop") { sending = false; releaseLater(); sendResponse({ ok: true }); }
+  if (msg.type === "release") { clearTimeout(idleTimer); release(); sendResponse({ ok: true }); }
 });

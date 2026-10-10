@@ -615,7 +615,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
 
   // In the extension, record through the offscreen page (background.js) so
   // Chrome asks for the microphone once for all sites, not once per site.
-  let micPort = null, micReady = false, micWait = null;
+  let micPort = null, micReady = false, micWait = null, usedExtMic = false;
   function snapshotTab() {
     return new Promise((resolve) => {
       const t = setTimeout(() => resolve(null), 2000);
@@ -638,6 +638,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     return new Int16Array(bytes.buffer);
   }
   function extMicStart() {
+    usedExtMic = true;
     if (!micPort) {
       micPort = chrome.runtime.connect({ name: "saurus-mic" });
       micPort.onMessage.addListener((msg) => {
@@ -700,6 +701,12 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   function releaseMic() {
     capturing = false;
     if (micPort) { try { micPort.postMessage({ type: "release" }); } catch (_) {} micReady = false; }
+    // Also tell the recorder directly: the port may have been dropped when
+    // the background worker went idle, and the mic would stay on.
+    if (usedExtMic) {
+      usedExtMic = false;
+      try { chrome.runtime.sendMessage({ target: "offscreen", type: "release" }, () => void chrome.runtime.lastError); } catch (_) {}
+    }
     if (micProc) { micProc.onaudioprocess = null; try { micProc.disconnect(); } catch (_) {} }
     if (micSource) { try { micSource.disconnect(); } catch (_) {} }
     if (micSink) { try { micSink.disconnect(); } catch (_) {} }
