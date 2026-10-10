@@ -17,7 +17,7 @@
   // ---------------------------------------------------------------------
   // Constants
   // ---------------------------------------------------------------------
-  const LANG_NAME = { fr: "French", de: "German", es: "Spanish" };
+  const LANG_NAME = { fr: "French", de: "German", es: "Spanish", sv: "Swedish" };
   const LEVEL_NAME = { 1: "hatchling", 2: "juvenile", 3: "adult", 4: "elder" };
   const LEVEL_SIZE = { 1: 80, 2: 92, 3: 104, 4: 112 }; // px: desktop-pet sized, grows with level
   const CORNER_KEY = "saurus.corner";
@@ -63,6 +63,11 @@
         <circle class="d-dot" cx="40" cy="84" r="1.8"/><circle class="d-dot" cx="56" cy="80" r="1.8"/><circle class="d-dot" cx="72" cy="86" r="1.8"/><circle class="d-dot" cx="50" cy="93" r="1.8"/><circle class="d-dot" cx="80" cy="94" r="1.8"/>
         <path class="d-fan" d="M24 82 L4 68 A25 25 0 0 1 20 57 Z"/><path class="d-rib" d="M24 82 L9 61 M24 82 L14 58"/>
         <circle class="d-dress" cx="34" cy="7" r="5.5"/><circle class="d-fan" cx="34" cy="7" r="2"/></g>`,
+      sv: `<g class="costume"><path class="d-sweater" d="M21 72 Q56 54 92 74 L90 93 Q56 101 22 92 Z"/>
+        <path class="d-zig" d="M27 82 l5 -4 l5 4 l5 -4 l5 4 l5 -4 l5 4 l5 -4 l5 4 l5 -4 l5 4 l5 -4 l5 4"/>
+        <path class="d-dala" d="M6 94 L8 80 Q4 76 6 72 L10 70 L12 64 L16 68 Q22 70 22 76 L24 94 L19 94 L17 84 L12 84 L11 94 Z"/>
+        <path class="d-leaf" d="M32 9 Q45 -1 58 9"/><circle class="d-fl1" cx="33" cy="9" r="3"/><circle class="d-fl2" cx="39" cy="4.5" r="3"/>
+        <circle class="d-fl3" cx="45.5" cy="3" r="3"/><circle class="d-fl1" cx="52" cy="4.5" r="3"/><circle class="d-fl2" cx="57.5" cy="9" r="3"/></g>`,
     }[lang] || "";
     const specs = level >= 4
       ? `<g><circle class="d-specs" cx="40" cy="16" r="5.5"/><line class="d-specs" x1="34.5" y1="15" x2="27" y2="12"/></g>` : "";
@@ -185,6 +190,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .d-leder{fill:var(--leder)}.d-strap{fill:none;stroke:var(--leder) !important;stroke-width:4 !important}
 .d-hat{fill:var(--hat)}.d-feather{fill:none;stroke:var(--beret) !important;stroke-width:3 !important}
 .d-dress{fill:var(--dress)}.d-dot{fill:var(--shell);stroke:none !important}
+.d-sweater{fill:#2F5DA8}.d-zig{fill:none;stroke:var(--fan) !important;stroke-width:2.2 !important}.d-dala{fill:var(--beret)}
+.d-leaf{fill:none;stroke:#3F8A4A !important;stroke-width:3 !important}.d-fl1{fill:#fff}.d-fl2{fill:var(--fan)}.d-fl3{fill:#F2A7C3}
 .d-fan{fill:var(--fan)}.d-rib{fill:none;stroke-width:1.2 !important}
 .eye{transform-box:fill-box;transform-origin:center;transition:transform .07s}
 .blink .eye{transform:scaleY(.1)}
@@ -1150,6 +1157,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
         Digit1: () => call("setLanguage", "fr"),
         Digit2: () => call("setLanguage", "de"),
         Digit3: () => call("setLanguage", "es"),
+        Digit4: () => call("setLanguage", "sv"),
       }[e.code];
       if (action) {
         e.preventDefault();

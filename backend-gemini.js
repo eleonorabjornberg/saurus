@@ -24,7 +24,7 @@
     "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + KEY;
   const REST_URL = (model) => `${API}/v1beta/models/${model}:generateContent?key=${KEY}`;
 
-  const LANG = { fr: "French", de: "German", es: "Spanish" };
+  const LANG = { fr: "French", de: "German", es: "Spanish", sv: "Swedish" };
   const LEVEL = {
     1: "total beginner (hatchling): mostly English with a few key words in the target language",
     2: "beginner (juvenile): short, very simple sentences",
@@ -39,7 +39,7 @@
     try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch (_) { return fallback; }
   }
   function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (_) {} }
-  const levels = Object.assign({ fr: 1, de: 1, es: 1 }, load("saurus.levels", {}));
+  const levels = Object.assign({ fr: 1, de: 1, es: 1, sv: 1 }, load("saurus.levels", {}));
   let lang = LANG[load("saurus.language", "")] ? load("saurus.language", "fr") : (LANG[cfg.language] ? cfg.language : "de");
 
   // ---------------------------------------------------------------------
