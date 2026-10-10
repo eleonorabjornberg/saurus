@@ -30,8 +30,8 @@
 
   const LANG = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi" };
   const LEVEL = {
-    1: "total beginner (hatchling): only the target language, but very simple: short sentences of a few words, present tense, the most common words, spoken slowly",
-    2: "beginner (juvenile): only the target language, simple everyday words and short sentences",
+    1: "total beginner (hatchling): mostly the learner's own language, mixing in simple target-language words and short phrases, and repeating them",
+    2: "beginner (juvenile): only the target language, but very simple: short sentences, present tense, the most common words, spoken slowly",
     3: "intermediate (adult): only the target language, fuller sentences with some subordinate clauses",
     4: "advanced (elder): natural, fluent speech with idioms",
   };
@@ -400,10 +400,11 @@
   // ---------------------------------------------------------------------
   // Page translation (Gemini Flash, structured output)
   // ---------------------------------------------------------------------
-  // Every level is fully in the target language; levels differ in simplicity.
+  // Level 1 mixes the page's language with the target language; levels 2-4
+  // are fully in the target language, from very simple to natural.
   const GUIDE = {
-    1: "Rewrite the whole block in the target language for a total beginner (CEFR A1): very short sentences, present tense, only the most common words. Keep the key facts, drop details if needed. Wrap the one or two most important words that are likely new in <mark></mark>.",
-    2: "Rewrite the whole block in simple target language (CEFR A2): short sentences and everyday words, keeping the main points. Wrap one or two words that are likely new in <mark></mark>.",
+    1: "Keep the block in its original language, but replace the key words and a few short, useful phrases (about a quarter of the text) with the target language, so the meaning stays clear from context. Wrap each target-language word or phrase in <mark></mark>.",
+    2: "Rewrite the whole block in the target language for a beginner (CEFR A1-A2): very short sentences, present tense, only common words. Keep the key facts, drop details if needed. Wrap the one or two most important words that are likely new in <mark></mark>.",
     3: "Translate the whole block into clear target language (CEFR B1): complete sentences, some subordinate clauses, common vocabulary. Wrap one or two harder words in <mark></mark>.",
     4: "Translate the whole block into natural, idiomatic target language, as a native writer would. Wrap one or two advanced or idiomatic words in <mark></mark>.",
   };
@@ -415,7 +416,7 @@
   let thinkIdx = 0;
   // Finished translations, so revisiting a level or language is instant.
   const cache = new Map();
-  const cacheKey = (language, level, text) => `v2|${language}|${level}|${text}`;
+  const cacheKey = (language, level, text) => `v3|${language}|${level}|${text}`;
 
   async function translateBatch(blocks, language, level) {
     const out = [], todo = [];
