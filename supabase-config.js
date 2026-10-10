@@ -11,7 +11,7 @@
  * Left empty, Saurus remembers levels in this browser only.
  */
 window.SAURUS_SUPABASE = {
-  url: "",          // e.g. "https://abcdefghijkl.supabase.co"
+  url: "https://hwsiplosbvlsktxxsmxd.supabase.co",
   anonKey: "",      // "sb_publishable_..." or the legacy "eyJ..." anon key
   learner: "demo",  // whose memory to use (one shared demo learner)
 };
