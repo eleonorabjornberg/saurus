@@ -66,7 +66,7 @@ No new app, no lessons to schedule: it rides along with what you already read.
 | `backend-mock.js` | A fake `SaurusBackend` with scripted replies and a synthetic voice. Used when nothing above is configured. |
 | `demo.html` | An article page that loads both. |
 | `manifest.json` | Chrome extension (Manifest V3) that injects both as content scripts. |
-| `assets/` | Optional avatar art: `saurus-{fr,de,es,sv}-{1..4}.png`. Missing files fall back to the built-in SVG. |
+| `assets/` | Optional avatar art: `saurus-{fr,de,es,sv,hi}-{1..4}.png`. Missing files fall back to the built-in SVG. |
 
 ## Run it locally
 
@@ -133,7 +133,12 @@ on your laptop, so every install of the extension shares the same memory.
 4. Reload the extension. As you use Saurus, rows appear in
    **Table Editor → `saurus_progress`** and **`saurus_struggles`**.
 
-**What is stored** (per `learner`, default `"demo"`, and per language):
+**Whose memory:** `learner` in `supabase-config.js`. `"auto"` (default) gives
+each install its own random id (kept in the extension's storage), so every
+user has a separate memory. A fixed name such as `"demo"` makes everyone
+using it share one memory, handy for a rehearsed demo.
+
+**What is stored** (per learner and per language):
 
 | Table | Holds | Written when |
 |---|---|---|
@@ -165,6 +170,27 @@ Database functions (all the extension can call):
 If the GitHub integration doesn't apply migrations, run each file in
 `supabase/migrations/` in order in the SQL Editor. They are safe to re-run.
 
+## Gemini key in Supabase (no key on anyone's machine)
+
+`supabase/functions/gemini` is an Edge Function that calls Gemini with the
+key from Supabase's secrets: page translation over HTTPS, Gemini Live over a
+WebSocket. Set up once:
+
+1. Dashboard → **Edge Functions → Secrets**: add `GEMINI_API_KEY`.
+2. Deploy the function: `supabase functions deploy gemini --no-verify-jwt`
+   (CLI), or Dashboard → **Edge Functions → Deploy a new function → Via
+   editor**, name it `gemini`, paste `supabase/functions/gemini/index.ts`,
+   deploy, then turn **off** "Enforce JWT verification" in its settings
+   (browsers can't send that header on a WebSocket).
+3. In `supabase-config.js` set `gemini: true`, commit and push. Anyone using
+   the repo now gets real Gemini with no key. A key in `config.js` still wins.
+
+On the free plan a function runs at most 150 s, so a Live voice session
+through it is cut every ~2.5 minutes; Saurus reconnects by itself and
+carries the conversation on. Note the function is open to anyone who finds
+its URL (it only allows the configured models); set `ALLOWED_ORIGINS` in its
+secrets to your extension's origin to narrow it.
+
 ## Controls
 
 | Key / action | Does |
@@ -178,7 +204,7 @@ If the GitHub integration doesn't apply migrations, run each file in
 | Click a bubble | Expands / collapses it. Scroll the bubbles to see older ones. |
 | Alt+↑ / Alt+↓ | Demo: level up / down (`SaurusBackend.demo.levelUp/levelDown`). |
 | Alt+D | Demo: drill offer (`SaurusBackend.demo.drillOffer`). |
-| Alt+1 / 2 / 3 / 4 | Switch to French / German / Spanish / Swedish (`setLanguage`). |
+| Alt+1 / 2 / 3 / 4 / 5 | Switch to French / German / Spanish / Swedish / Hindi (`setLanguage`). |
 
 Mock only: typing `/error` makes the mock emit an `error` event.
 
@@ -225,7 +251,7 @@ window.SaurusBackend = {
   endOfSpeech()
   sendText(text)
   sendContext({ type: "word_pressed", word, sentence })
-  setLanguage(code)                       // "fr" | "de" | "es" | "sv"
+  setLanguage(code)                       // "fr" | "de" | "es" | "sv" | "hi"
   stop()
   on(eventName, handler)
 
@@ -242,7 +268,7 @@ window.SaurusBackend = {
 | `endOfSpeech()` | Button / Space released | Only called if at least one chunk was sent. |
 | `sendText(text)` | Muted mode, Enter; also the drill buttons send `"Yes"` / `"Not now"` | The front end shows the user's bubble itself; **do not** echo typed text back as a `transcript`. |
 | `sendContext({type, word, sentence})` | A word on the page is clicked | `sentence` is the sentence around the word, as currently shown (translated or not). |
-| `setLanguage(code)` | Alt+1/2/3/4 | Reply with a `language` event (and a `level` event for that language). |
+| `setLanguage(code)` | Alt+1/2/3/4/5 | Reply with a `language` event (and a `level` event for that language). |
 | `stop()` | Alt+S (dismiss) | Close the session. Events emitted after this are ignored. |
 | `on(name, handler)` | Once per backend object | Keep a list of handlers per event. No `off` needed. |
 | `demo.*` | Alt+↑, Alt+↓, Alt+D | Optional. If missing, Saurus says the shortcut isn't supported. Fire the same events you would normally (`level` + `celebrate`, `drill_offer`). |

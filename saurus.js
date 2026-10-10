@@ -17,7 +17,7 @@
   // ---------------------------------------------------------------------
   // Constants
   // ---------------------------------------------------------------------
-  const LANG_NAME = { fr: "French", de: "German", es: "Spanish", sv: "Swedish" };
+  const LANG_NAME = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi" };
   const LEVEL_NAME = { 1: "hatchling", 2: "juvenile", 3: "adult", 4: "elder" };
   const LEVEL_SIZE = { 1: 80, 2: 92, 3: 104, 4: 112 }; // px: desktop-pet sized, grows with level
   const CORNER_KEY = "saurus.corner";
@@ -68,6 +68,10 @@
         <path class="d-dala" d="M6 94 L8 80 Q4 76 6 72 L10 70 L12 64 L16 68 Q22 70 22 76 L24 94 L19 94 L17 84 L12 84 L11 94 Z"/>
         <path class="d-leaf" d="M32 9 Q45 -1 58 9"/><circle class="d-fl1" cx="33" cy="9" r="3"/><circle class="d-fl2" cx="39" cy="4.5" r="3"/>
         <circle class="d-fl3" cx="45.5" cy="3" r="3"/><circle class="d-fl1" cx="52" cy="4.5" r="3"/><circle class="d-fl2" cx="57.5" cy="9" r="3"/></g>`,
+      hi: `<g class="costume"><path class="d-kurta" d="M21 70 Q56 54 92 74 L91 96 Q56 103 22 95 Z"/>
+        <path class="d-trim" d="M24 88 Q56 96 90 89"/>
+        <g class="d-garland"><circle cx="24" cy="62" r="3.4"/><circle cx="27" cy="68" r="3.4"/><circle cx="31" cy="73" r="3.4"/>
+        <circle cx="36" cy="77" r="3.4"/><circle cx="41" cy="73" r="3.4"/><circle cx="43" cy="67" r="3.4"/><circle cx="42" cy="61" r="3.4"/></g></g>`,
     }[lang] || "";
     const specs = level >= 4
       ? `<g><circle class="d-specs" cx="40" cy="16" r="5.5"/><line class="d-specs" x1="34.5" y1="15" x2="27" y2="12"/></g>` : "";
@@ -201,6 +205,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 .d-dress{fill:var(--dress)}.d-dot{fill:var(--shell);stroke:none !important}
 .d-sweater{fill:#2F5DA8}.d-zig{fill:none;stroke:var(--fan) !important;stroke-width:2.2 !important}.d-dala{fill:var(--beret)}
 .d-leaf{fill:none;stroke:#3F8A4A !important;stroke-width:3 !important}.d-fl1{fill:#fff}.d-fl2{fill:var(--fan)}.d-fl3{fill:#F2A7C3}
+.d-kurta{fill:#E8873A}.d-trim{fill:none;stroke:var(--fan) !important;stroke-width:2.6 !important}.d-garland circle{fill:#F5A623}
 .d-fan{fill:var(--fan)}.d-rib{fill:none;stroke-width:1.2 !important}
 .eye{transform-box:fill-box;transform-origin:center;transition:transform .07s}
 .blink .eye{transform:scaleY(.1)}
@@ -1198,6 +1203,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
         Digit2: () => call("setLanguage", "de"),
         Digit3: () => call("setLanguage", "es"),
         Digit4: () => call("setLanguage", "sv"),
+        Digit5: () => call("setLanguage", "hi"),
       }[e.code];
       if (action) {
         e.preventDefault();

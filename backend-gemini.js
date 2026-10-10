@@ -28,7 +28,7 @@
     "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + KEY;
   const REST_URL = (model) => `${API}/v1beta/models/${model}:generateContent?key=${KEY}`;
 
-  const LANG = { fr: "French", de: "German", es: "Spanish", sv: "Swedish" };
+  const LANG = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi" };
   const LEVEL = {
     1: "total beginner (hatchling): mostly English with a few key words in the target language",
     2: "beginner (juvenile): short, very simple sentences",
@@ -43,11 +43,11 @@
     try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch (_) { return fallback; }
   }
   function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (_) {} }
-  const levels = Object.assign({ fr: 1, de: 1, es: 1, sv: 1 }, load("saurus.levels", {}));
+  const levels = Object.assign({ fr: 1, de: 1, es: 1, sv: 1, hi: 1 }, load("saurus.levels", {}));
   let lang = LANG[load("saurus.language", "")] ? load("saurus.language", "fr") : (LANG[cfg.language] ? cfg.language : "de");
-  const struggles = { fr: [], de: [], es: [], sv: [] }; // [{word, note, misses}], most missed first
+  const struggles = { fr: [], de: [], es: [], sv: [], hi: [] }; // [{word, note, misses}], most missed first
   const marked = new Set(); // target-language words the last translations marked on the page
-  const nextAction = { fr: null, de: null, es: null, sv: null }; // from saurus_next_action
+  const nextAction = { fr: null, de: null, es: null, sv: null, hi: null }; // from saurus_next_action
 
   // Supabase (hosted, see supabase-config.js): level per language and
   // struggle words, through three database functions (supabase/migrations).
@@ -55,7 +55,31 @@
   const sb = window.SAURUS_SUPABASE || {};
   const SB_URL = String(sb.url || cfg.supabaseUrl || "").replace(/\/$/, "");
   const SB_KEY = String(sb.anonKey || cfg.supabaseAnonKey || "");
-  const LEARNER = String(sb.learner || cfg.learner || "demo").slice(0, 64);
+  // Whose memory: a fixed name (e.g. "demo") shared by everyone using it, or
+  // "auto" (default): a random id per install, so each user has their own.
+  const FIXED_LEARNER = String(sb.learner || cfg.learner || "auto").slice(0, 64);
+  let learnerP = null;
+  function learnerId() {
+    if (FIXED_LEARNER && FIXED_LEARNER !== "auto") return Promise.resolve(FIXED_LEARNER);
+    if (!learnerP) learnerP = new Promise((resolve) => {
+      const make = () => "u-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+      try {
+        // extension: one id for every site; the page's localStorage is per site
+        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get("saurusLearner", (r) => {
+            let id = r && r.saurusLearner;
+            if (!id) { id = make(); chrome.storage.local.set({ saurusLearner: id }); }
+            resolve(id);
+          });
+          return;
+        }
+      } catch (_) { /* not an extension */ }
+      let id = load("saurus.learner", null);
+      if (!id) { id = make(); save("saurus.learner", id); }
+      resolve(id);
+    });
+    return learnerP;
+  }
   const memoryOn = !!(SB_URL && SB_KEY);
 
   async function rpc(fn, args) {
@@ -76,14 +100,14 @@
   }
   async function loadMemory(code) {
     if (!memoryOn) return;
-    const m = await rpc("saurus_memory", { p_learner: LEARNER, p_language: code });
+    const m = await rpc("saurus_memory", { p_learner: await learnerId(), p_language: code });
     if (m && m.level) levels[code] = Math.max(1, Math.min(4, Number(m.level) || 1));
     struggles[code] = Array.isArray(m && m.struggles) ? m.struggles : [];
     nextAction[code] = (m && m.next) || null;
   }
   function saveLevel(code, lv) {
     save("saurus.levels", levels);
-    if (memoryOn) rpc("saurus_set_level", { p_learner: LEARNER, p_language: code, p_level: lv }).catch(memoryProblem);
+    if (memoryOn) learnerId().then((id) => rpc("saurus_set_level", { p_learner: id, p_language: code, p_level: lv })).catch(memoryProblem);
   }
   // Record a right or wrong answer about a word. Supabase replies with what
   // to practise next (saurus_next_action), which goes back to Gemini.
@@ -97,7 +121,7 @@
     if (!memoryOn) return "noted";
     try {
       const next = await rpc("saurus_log_answer", {
-        p_learner: LEARNER, p_language: lang, p_word: w, p_correct: !!correct,
+        p_learner: await learnerId(), p_language: lang, p_word: w, p_correct: !!correct,
         p_note: note ? String(note).slice(0, 200) : null,
       });
       nextAction[lang] = next;
