@@ -58,8 +58,10 @@ No new app, no lessons to schedule: it rides along with what you already read.
 | File | What it is |
 |---|---|
 | `saurus.js` | The whole widget. One `<script>` tag injects it into any page (shadow DOM). |
-| `backend.js` | **The real backend goes here.** Empty for now, so the mock runs. |
-| `backend-mock.js` | A fake `SaurusBackend` with scripted replies, timers and a synthetic voice. Steps aside automatically once `backend.js` sets `window.SaurusBackend`. |
+| `config.js` | Settings: Gemini API key (empty in git, never commit one), proxy URL, models, starting language. |
+| `backend.js` | Slot for a custom backend (e.g. Supabase). Empty for now. |
+| `backend-gemini.js` | The live backend: Gemini Live voice + Gemini Flash translation. Used when `config.js` has a key or `apiBase`. |
+| `backend-mock.js` | A fake `SaurusBackend` with scripted replies and a synthetic voice. Used when nothing above is configured. |
 | `demo.html` | An article page that loads both. |
 | `manifest.json` | Chrome extension (Manifest V3) that injects both as content scripts. |
 | `assets/` | Optional avatar art: `saurus-{fr,de,es}-{1..4}.png`. Missing files fall back to the built-in SVG. |
@@ -75,6 +77,41 @@ Use `localhost` (not `file://`) so the browser allows the microphone.
 
 As an extension: `chrome://extensions` → Developer mode → **Load unpacked** →
 pick this folder. Press Alt+S on any page.
+
+## Use the real Gemini backend
+
+Load order: `config.js` → `backend.js` → `backend-gemini.js` →
+`backend-mock.js` → `saurus.js`. The first backend that sets
+`window.SaurusBackend` wins, so the mock only runs when nothing else is set up.
+
+**Local demo with your own key** (never push it, the repo is public):
+
+```sh
+# in the saurus folder: paste your key between the quotes of geminiApiKey in config.js, then
+git update-index --skip-worktree config.js   # git now ignores your local edit
+```
+
+Reload the extension in `chrome://extensions` and refresh the tab.
+
+**Keys in Supabase (production):** leave `geminiApiKey` empty and set
+`apiBase` to a Supabase Edge Function that forwards to
+`https://generativelanguage.googleapis.com` with the key added server-side.
+It must proxy two paths:
+
+- `POST /v1beta/models/{model}:generateContent` (page translation)
+- the WebSocket `/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent` (Gemini Live)
+
+…and send CORS headers. Store the key with `supabase secrets set GEMINI_API_KEY=...`.
+
+What `backend-gemini.js` does:
+- **Voice:** one Gemini Live session per summon, with push-to-talk (manual
+  activity detection), transcripts of both sides, and the page text in the
+  system instructions. Tools the model calls while talking: `highlight`,
+  `celebrate`, `level_up`, `level_down`, `offer_drill`.
+- **Translation:** Gemini Flash with structured JSON output, level 1 (a few
+  swapped words) to level 4 (natural full translation).
+- **Memory:** level per language and the last language, in `localStorage`
+  (move to Supabase to share across devices).
 
 ## Controls
 
