@@ -221,7 +221,7 @@
       "If the learner asks to practise another language (French, German, Spanish, Swedish or Hindi), call switch_language first, then continue in that language. If they ask for easier or harder, follow them.",
       `The page (${page.url}):\n"""\n${page.text.slice(0, 8000)}\n"""`,
       resuming && history.length
-        ? `The connection just dropped and came back. Conversation so far (continue it; do not greet again):\n${history.join("\n")}`
+        ? `This is a continued session. Conversation so far (continue it; do not greet again unless asked):\n${history.join("\n")}`
         : "",
     ].join("\n");
   }
@@ -274,6 +274,27 @@
 
   // Sessions can end on their own (e.g. Supabase's Edge Function time limit,
   // or Gemini's session limit): reconnect quietly and carry on.
+  // Language or level changed: the session's standing instructions are only
+  // read when it opens, so reopen it with fresh ones (carrying the
+  // conversation over). Waits until Saurus finishes speaking.
+  let pendingRefresh = null;
+  function refreshSession(greet) {
+    if (!running) return;
+    pendingRefresh = { greet: greet || (pendingRefresh && pendingRefresh.greet) || null };
+    if (live && !speaking && !talking) doRefresh();
+  }
+  function doRefresh() {
+    const p = pendingRefresh;
+    pendingRefresh = null;
+    if (!p || !running) return;
+    resuming = true;
+    setState("thinking");
+    connect().then(() => {
+      resuming = false;
+      if (p.greet) say(p.greet); else setState("idle");
+    }, (e) => { resuming = false; if (running) reconnect(e.message); });
+  }
+
   function reconnect(why) {
     if (reconnects >= 3) { setState("idle"); emit("error", { message: why }); return; }
     reconnects++;
@@ -337,6 +358,7 @@
         finishUser();
         finishSaurus(false);
         if (!talking) setState("idle");
+        if (pendingRefresh && !talking) doRefresh();
       }
     }
     if (msg.toolCall && msg.toolCall.functionCalls) {
@@ -361,6 +383,7 @@
         if (!code) return "unknown language; choose fr, de, es, sv or hi";
         if (code === lang) return `already practising ${LANG[code]}`;
         const info = await switchLanguage(code, true);
+        if (info) refreshSession(null); // after this turn, continue under the new language's instructions
         return info ? `switched to ${LANG[code]}. ${info} From now on speak ${LANG[code]} at that level.` : "not switched";
       }
       case "offer_drill": emit("drill_offer", { topic: String(args.topic || "this page") }); return "offered; wait for the learner's answer";
@@ -391,6 +414,7 @@
     const next = Math.max(1, Math.min(4, levels[lang] + delta));
     if (next === levels[lang]) return `already at level ${next}`;
     levels[lang] = next;
+    refreshSession(null);
     saveLevel(lang, next);
     emit("level", { language: lang, level: next });
     if (delta > 0) emit("celebrate");
@@ -555,7 +579,7 @@
 
     async setLanguage(code) {
       const info = await switchLanguage(code, false);
-      if (info) say(`(Switch now: from here on speak ${LANG[code]} with me. ${info} Greet me in ${LANG[code]} and continue our conversation about the page.)`);
+      if (info) refreshSession(`(We just switched to ${LANG[code]}. Greet me in ${LANG[code]} and continue our conversation about the page.)`);
     },
 
     stop() {
@@ -571,14 +595,8 @@
     },
 
     demo: {
-      levelUp() {
-        const r = changeLevel(+1);
-        if (live) say(`(My ${LANG[lang]} ${r}. Adapt to it from now on.)`, false);
-      },
-      levelDown() {
-        const r = changeLevel(-1);
-        if (live) say(`(My ${LANG[lang]} ${r}. Adapt to it from now on.)`, false);
-      },
+      levelUp() { changeLevel(+1); },   // the session reopens at the new level
+      levelDown() { changeLevel(-1); },
       drillOffer() {
         const due = struggles[lang].slice(0, 3).map((x) => x.word);
         const topic = due.length ? due.join(", ") : "the words on this page";
