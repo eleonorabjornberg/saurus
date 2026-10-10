@@ -10,6 +10,49 @@
  */
 "use strict";
 
+// ---------------------------------------------------------------------------
+// Accounts (Supabase Auth), by Mahdi Yusuf. Only this worker holds the
+// session; the popup and content scripts get user/profile data, never tokens.
+// ---------------------------------------------------------------------------
+importScripts("supabase-config.js", "vendor/supabase.js", "auth-service.js");
+// Note: chrome.storage.local stays readable by Saurus's content scripts
+// (they keep the pet, language and translation cache there); web pages
+// themselves can't read extension storage.
+const account = SaurusAuthService.createAuthService({
+  createClient: supabase.createClient, config: SAURUS_SUPABASE, storage: chrome.storage.local,
+  notify(event) {
+    chrome.tabs.query({}).then((tabs) => Promise.allSettled(tabs.map((tab) =>
+      chrome.tabs.sendMessage(tab.id, { channel: "saurus-account-changed", event })))).catch(() => {});
+  },
+});
+chrome.alarms.create("saurus-session", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === "saurus-session") account.refresh().catch(() => {});
+});
+chrome.runtime.onStartup.addListener(() => {
+  chrome.alarms.create("saurus-session", { periodInMinutes: 1 });
+  account.refresh().catch(() => {});
+});
+chrome.runtime.onMessage.addListener((message, sender, respond) => {
+  if (message?.channel !== "saurus-account") return false;
+  const trustedUI = sender.id === chrome.runtime.id && String(sender.url || "").split(/[?#]/)[0] === chrome.runtime.getURL("popup.html");
+  (async () => {
+    if (sender.id !== chrome.runtime.id) throw new Error("Untrusted sender.");
+    if (["signin", "signup", "signout"].includes(message.type) && !trustedUI) throw new Error("Open the Saurus popup to manage your account.");
+    if (message.type === "memory" && !trustedUI && !message.payload?.expectedUserId) throw new Error("Open Saurus again to restore your account.");
+    if (message.type === "open") {
+      try { await chrome.action.openPopup(); }
+      catch (_) { await chrome.tabs.create({ url: chrome.runtime.getURL("popup.html") }); }
+      return true;
+    }
+    return account.handle(message.type, message.payload);
+  })().then((data) => respond({ ok: true, data }), (error) => respond({ ok: false, error: error.message }));
+  return true;
+});
+
+// ---------------------------------------------------------------------------
+// Microphone and screenshots
+// ---------------------------------------------------------------------------
 let talker = null;        // the port of the tab currently talking
 let creating = null;
 

@@ -128,7 +128,19 @@
     console.warn("[saurus-gemini] memory:", e);
     emit("transcript", { who: "saurus", text: `(I can't reach my memory right now: ${e.message}. I'll keep going without it.)`, final: true });
   }
+  // Signed in (extension, auth-bridge.js): the account's own memory through
+  // the background worker (saurus_account_memory, RLS). Otherwise the
+  // anonymous per-browser learner (demo page).
+  const acct = () => (window.SaurusAccount && window.SaurusAccount.current ? window.SaurusAccount : null);
   async function loadMemory(code) {
+    if (acct()) {
+      const m = await acct().memory("memory", { language: code });
+      if (m && m.level) levels[code] = Math.max(1, Math.min(4, Number(m.level) || 1));
+      struggles[code] = Array.isArray(m && m.struggles) ? m.struggles : [];
+      nextAction[code] = (m && m.next) || null;
+      lastSummary[code] = (m && m.summary) || null;
+      return;
+    }
     if (!memoryOn) return;
     const m = await rpc("saurus_memory", { p_learner: await learnerId(), p_language: code });
     if (m && m.level) levels[code] = Math.max(1, Math.min(4, Number(m.level) || 1));
@@ -175,19 +187,22 @@
   function saveSummary(code) {
     const lines = history.slice(summarisedAt);
     summarisedAt = history.length;
-    if (!memoryOn || lines.filter((l) => l.startsWith("Learner")).length < 1 || lines.length < 2) return;
+    if (!(memoryOn || acct()) || lines.filter((l) => l.startsWith("Learner")).length < 1 || lines.length < 2) return;
+    const who = acct();
     const convo = lines.join("\n");
     flash([{ text: `Summarise this ${LANG[code]} tutoring conversation in at most two short sentences, in English: the topic, and what the learner did well or struggled with. No preamble.\n\n${convo}` }])
       .then(async (summary) => {
         if (!summary) return;
         lastSummary[code] = summary.slice(0, 800);
-        await rpc("saurus_save_summary", { p_learner: await learnerId(), p_language: code, p_summary: summary.slice(0, 800) });
+        if (who) await who.memory("summary", { language: code, summary: summary.slice(0, 800) });
+        else await rpc("saurus_save_summary", { p_learner: await learnerId(), p_language: code, p_summary: summary.slice(0, 800) });
       })
       .catch((e) => console.warn("[saurus-gemini] summary:", e));
   }
   function saveLevel(code, lv) {
     save("saurus.levels", levels);
-    if (memoryOn) learnerId().then((id) => rpc("saurus_set_level", { p_learner: id, p_language: code, p_level: lv })).catch(memoryProblem);
+    if (acct()) acct().memory("level", { language: code, level: lv }).catch(memoryProblem);
+    else if (memoryOn) learnerId().then((id) => rpc("saurus_set_level", { p_learner: id, p_language: code, p_level: lv })).catch(memoryProblem);
   }
   // Record a right or wrong answer about a word. Supabase replies with what
   // to practise next (saurus_next_action), which goes back to Gemini.
@@ -198,12 +213,14 @@
     const hit = list.find((x) => x.word.toLowerCase() === w.toLowerCase());
     if (hit) { if (correct) hit.correct = (hit.correct || 0) + 1; else hit.misses++; }
     else if (!correct) list.unshift({ word: w, note: note || null, misses: 1, correct: 0 });
-    if (!memoryOn) return "noted";
+    if (!memoryOn && !acct()) return "noted";
     try {
-      const next = await rpc("saurus_log_answer", {
-        p_learner: await learnerId(), p_language: lang, p_word: w, p_correct: !!correct,
-        p_note: note ? String(note).slice(0, 200) : null,
-      });
+      const next = acct()
+        ? await acct().memory("answer", { language: lang, word: w, correct: !!correct, note: note ? String(note).slice(0, 200) : null })
+        : await rpc("saurus_log_answer", {
+          p_learner: await learnerId(), p_language: lang, p_word: w, p_correct: !!correct,
+          p_note: note ? String(note).slice(0, 200) : null,
+        });
       nextAction[lang] = next;
       return `saved. ${describeNext(next)}`;
     } catch (e) {
@@ -517,6 +534,7 @@
     lang = code;
     recall = null;
     save("saurus.language", code);
+    if (acct()) acct().memory("preferences", { language: code }).catch((e) => console.warn("[saurus-gemini] preferences:", e));
     emit("language", { code });
     if (!fromModel && speaking) finishSaurus(true);
     if (!fromModel) setState("thinking");
@@ -688,11 +706,17 @@
       page = { url: String(pageUrl || ""), text: String(pageText || "") };
       // Docs, Slides and web apps have little readable text in the page:
       // read a screenshot of the tab instead (taken by the extension).
-      const seeing = snapshot ? readScreen(snapshot).then((t) => { if (t) page.text = t; }, (e) => console.warn("[saurus-gemini] snapshot:", e)) : null;
+      const seeing = snapshot ? readScreen(snapshot).then((t) => { if (t) page.text = t; }, (e) => {
+        console.warn("[saurus-gemini] snapshot:", e);
+        emit("transcript", { who: "saurus", text: `(I couldn't read your screen: ${e.message}.)`, final: true });
+      }) : null;
       talking = false; inText = ""; outText = ""; speaking = false;
       history.length = 0; reconnects = 0; summarisedAt = 0; resumeHandle = null;
       setState("thinking");
       await prefsReady;
+      // Signed in: the account's language comes first (it follows the user).
+      const prof = acct() && acct().current.profile;
+      if (prof && LANG[prof.language]) lang = prof.language;
       try {
         await loadMemory(lang); // before connecting, so the session knows level and struggles
       } catch (e) {

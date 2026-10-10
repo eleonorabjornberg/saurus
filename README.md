@@ -78,7 +78,9 @@ python3 -m http.server 8000
 Use `localhost` (not `file://`) so the browser allows the microphone.
 
 As an extension: `chrome://extensions` → Developer mode → **Load unpacked** →
-pick this folder. Press Alt+S on any page.
+pick this folder. Click the Saurus icon in the toolbar to create an account or
+log in (the extension requires it; see [AUTH_SETUP.md](AUTH_SETUP.md)), then
+press Alt+S on any page. The demo page needs no account.
 
 ## Use the real Gemini backend
 

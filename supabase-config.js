@@ -10,7 +10,7 @@
  *
  * Left empty, Saurus remembers levels in this browser only.
  */
-window.SAURUS_SUPABASE = {
+globalThis.SAURUS_SUPABASE = {
   url: "https://hwsiplosbvlsktxxsmxd.supabase.co",
   anonKey: "sb_publishable_TAps0Sn1VMTxIZAKK3tQVg_t_iBGLcL",
   learner: "auto",  // "auto": each install gets its own memory; or a fixed name like "demo" to share one

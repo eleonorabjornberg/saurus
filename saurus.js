@@ -615,7 +615,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
 
   // In the extension, record through the offscreen page (background.js) so
   // Chrome asks for the microphone once for all sites, not once per site.
-  let micPort = null, micReady = false, micWait = null;
+  let micPort = null, micReady = false, micWait = null, usedExtMic = false;
   function snapshotTab() {
     return new Promise((resolve) => {
       const t = setTimeout(() => resolve(null), 2000);
@@ -638,6 +638,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     return new Int16Array(bytes.buffer);
   }
   function extMicStart() {
+    usedExtMic = true;
     if (!micPort) {
       micPort = chrome.runtime.connect({ name: "saurus-mic" });
       micPort.onMessage.addListener((msg) => {
@@ -700,6 +701,12 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   function releaseMic() {
     capturing = false;
     if (micPort) { try { micPort.postMessage({ type: "release" }); } catch (_) {} micReady = false; }
+    // Also tell the recorder directly: the port may have been dropped when
+    // the background worker went idle, and the mic would stay on.
+    if (usedExtMic) {
+      usedExtMic = false;
+      try { chrome.runtime.sendMessage({ target: "offscreen", type: "release" }, () => void chrome.runtime.lastError); } catch (_) {}
+    }
     if (micProc) { micProc.onaudioprocess = null; try { micProc.disconnect(); } catch (_) {} }
     if (micSource) { try { micSource.disconnect(); } catch (_) {} }
     if (micSink) { try { micSink.disconnect(); } catch (_) {} }
@@ -1254,6 +1261,37 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // ---------------------------------------------------------------------
   // Summon / dismiss
   // ---------------------------------------------------------------------
+  // In the extension you must be signed in (auth-bridge.js): without an
+  // account, the Saurus popup opens to sign up or log in instead. The demo
+  // page (no extension) has no sign-in and opens straight away.
+  let checkingAccount = false;
+  function openSaurus() {
+    if (active || checkingAccount) return;
+    const acc = window.SaurusAccount;
+    if (!acc) { summon(); return; }
+    checkingAccount = true;
+    acc.require().then((state) => {
+      checkingAccount = false;
+      if (state && !active) summon();
+    }, (err) => {
+      checkingAccount = false;
+      build();
+      active = true;
+      ui.root.hidden = false;
+      ui.log.replaceChildren();
+      renderArt();
+      problem(`I couldn't check your account: ${errText(err)}.`);
+    });
+  }
+  try {
+    if (EXT_BASE && chrome.runtime && chrome.runtime.onMessage) {
+      chrome.runtime.onMessage.addListener((msg) => {
+        if (msg && msg.channel === "saurus-launch" && !active) openSaurus();   // "Open Saurus" in the popup
+        if (msg && msg.channel === "saurus-account-changed" && active) dismiss(); // signed out or switched account
+      });
+    }
+  } catch (_) {}
+
   function summon() {
     build();
     active = true;
@@ -1287,14 +1325,22 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     const pageText = blocks.map((b) => b.text).join("\n").slice(0, 20000);
     // Little readable text (Docs, Slides, web apps): send a screenshot of
     // the tab instead, so Saurus still knows what you're looking at.
-    const snap = inExtension() && pageText.length < 500 ? snapshotTab() : Promise.resolve(null);
-    snap.then((snapshot) => callAsync("start", { pageUrl: location.href, pageText, snapshot }))
+    // Google Docs, Slides and Sheets draw their text on a canvas (the page
+    // text is only menus and sidebars), so always look at the screen there.
+    const canvasApp = /^docs\.google\.com$/.test(location.hostname) && /^\/(document|presentation|spreadsheets)\//.test(location.pathname);
+    const snap = inExtension() && (canvasApp || pageText.length < 500) ? snapshotTab() : Promise.resolve(null);
+    snap.then((snapshot) => {
+      if (canvasApp && !snapshot && my === session) {
+        addBubble("s", "(I can't see this document: reload Saurus in chrome://extensions and allow access to all sites, then refresh this tab.)");
+      }
+      return callAsync("start", { pageUrl: location.href, pageText: canvasApp && snapshot ? "" : pageText, snapshot });
+    })
       .then((info) => {
         if (my !== session) return;
         lang = (info && info.language) || "fr";
         level = Math.max(1, Math.min(4, Number(info && info.level) || 1));
         if (lang !== shownLang || level !== shownLevel) puffSwap(() => { shownLang = lang; shownLevel = level; renderArt(); });
-        translateAll();
+        if (!canvasApp) translateAll(); // the text there is on a canvas; only menus would change
       })
       .catch((err) => {
         if (my !== session) return;
@@ -1352,7 +1398,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       if (e.code === "KeyS") {
         e.preventDefault();
         e.stopPropagation();
-        if (!e.repeat) (active ? dismiss : summon)();
+        if (!e.repeat) (active ? dismiss : openSaurus)();
         return;
       }
       if (!active) return;
