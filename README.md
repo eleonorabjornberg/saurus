@@ -59,6 +59,8 @@ No new app, no lessons to schedule: it rides along with what you already read.
 |---|---|
 | `saurus.js` | The whole widget. One `<script>` tag injects it into any page (shadow DOM). |
 | `config.js` | Settings: Gemini API key (empty in git, never commit one), proxy URL, models, starting language. |
+| `supabase-config.js` | Supabase project URL + public anon key for Saurus's memory. Safe to commit. |
+| `supabase/migrations/` | The SQL that creates Saurus's memory in Supabase. Run once per project. |
 | `backend.js` | Slot for a custom backend (e.g. Supabase). Empty for now. |
 | `backend-gemini.js` | The live backend: Gemini Live voice + Gemini Flash translation. Used when `config.js` has a key or `apiBase`. |
 | `backend-mock.js` | A fake `SaurusBackend` with scripted replies and a synthetic voice. Used when nothing above is configured. |
@@ -80,7 +82,7 @@ pick this folder. Press Alt+S on any page.
 
 ## Use the real Gemini backend
 
-Load order: `config.js` → `backend.js` → `backend-gemini.js` →
+Load order: `config.js` → `supabase-config.js` → `backend.js` → `backend-gemini.js` →
 `backend-mock.js` → `saurus.js`. The first backend that sets
 `window.SaurusBackend` wins, so the mock only runs when nothing else is set up.
 
@@ -110,8 +112,43 @@ What `backend-gemini.js` does:
   `celebrate`, `level_up`, `level_down`, `offer_drill`.
 - **Translation:** Gemini Flash with structured JSON output, level 1 (a few
   swapped words) to level 4 (natural full translation).
-- **Memory:** level per language and the last language, in `localStorage`
-  (move to Supabase to share across devices).
+- **Memory:** level per language and the words you got wrong or looked up,
+  in Supabase (below). Without Supabase, levels stay in this browser only.
+
+## Memory in Supabase (hosted, no local server)
+
+Saurus calls your Supabase project straight from the browser. Nothing runs
+on your laptop, so every install of the extension shares the same memory.
+
+**Set up once per Supabase project:**
+
+1. Supabase Dashboard → **SQL Editor** → paste
+   `supabase/migrations/20261010160000_saurus_memory.sql` → **Run**
+   (or `supabase db push` with the Supabase CLI).
+2. Dashboard → **Project Settings → API**: copy the **Project URL** and the
+   **anon / publishable** key into `supabase-config.js`.
+3. Commit `supabase-config.js` and push. The anon key is public by design:
+   the tables are locked (row-level security, no policies) and the key can
+   only call the three functions below.
+4. Reload the extension. As you use Saurus, rows appear in
+   **Table Editor → `saurus_progress`** and **`saurus_struggles`**.
+
+**What is stored** (per `learner`, default `"demo"`, and per language):
+
+| Table | Holds | Written when |
+|---|---|---|
+| `saurus_progress` | `level` 1–4 | ⌥↑ / ⌥↓, or Gemini calls `level_up` / `level_down` |
+| `saurus_struggles` | `word`, `note`, `misses`, `last_seen` | Gemini calls `log_struggle` (you got a word wrong), or you click a target-language word on the page |
+
+**What Saurus does with it:** on ⌥S and on every language switch it calls
+`saurus_memory` to load your level and most-missed words. Gemini gets those
+words in its instructions, opens by bringing one back ("last time you had
+trouble with *Regeln*…"), and Saurus highlights it on the page.
+
+Database functions (all the extension can call):
+`saurus_memory(p_learner, p_language)`,
+`saurus_set_level(p_learner, p_language, p_level)`,
+`saurus_log_struggle(p_learner, p_language, p_word, p_note)`.
 
 ## Controls
 

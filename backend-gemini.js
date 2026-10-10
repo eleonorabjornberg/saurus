@@ -41,6 +41,59 @@
   function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (_) {} }
   const levels = Object.assign({ fr: 1, de: 1, es: 1, sv: 1 }, load("saurus.levels", {}));
   let lang = LANG[load("saurus.language", "")] ? load("saurus.language", "fr") : (LANG[cfg.language] ? cfg.language : "de");
+  const struggles = { fr: [], de: [], es: [], sv: [] }; // [{word, note, misses}], most missed first
+  const marked = new Set(); // target-language words the last translations marked on the page
+
+  // Supabase (hosted, see supabase-config.js): level per language and
+  // struggle words, through three database functions (supabase/migrations).
+  // Without it, levels stay in this browser only.
+  const sb = window.SAURUS_SUPABASE || {};
+  const SB_URL = String(sb.url || cfg.supabaseUrl || "").replace(/\/$/, "");
+  const SB_KEY = String(sb.anonKey || cfg.supabaseAnonKey || "");
+  const LEARNER = String(sb.learner || cfg.learner || "demo").slice(0, 64);
+  const memoryOn = !!(SB_URL && SB_KEY);
+
+  async function rpc(fn, args) {
+    const headers = { "Content-Type": "application/json", apikey: SB_KEY };
+    if (SB_KEY.startsWith("eyJ")) headers.Authorization = `Bearer ${SB_KEY}`; // legacy anon JWT
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, { method: "POST", headers, body: JSON.stringify(args) });
+    const text = await res.text();
+    if (!res.ok) {
+      let msg = text;
+      try { msg = JSON.parse(text).message || text; } catch (_) {}
+      throw new Error(`Supabase ${res.status}: ${msg}`);
+    }
+    return text ? JSON.parse(text) : null;
+  }
+  function memoryProblem(e) {
+    console.warn("[saurus-gemini] memory:", e);
+    emit("transcript", { who: "saurus", text: `(I can't reach my memory right now: ${e.message}. I'll keep going without it.)`, final: true });
+  }
+  async function loadMemory(code) {
+    if (!memoryOn) return;
+    const m = await rpc("saurus_memory", { p_learner: LEARNER, p_language: code });
+    if (m && m.level) levels[code] = Math.max(1, Math.min(4, Number(m.level) || 1));
+    struggles[code] = Array.isArray(m && m.struggles) ? m.struggles : [];
+  }
+  function saveLevel(code, lv) {
+    save("saurus.levels", levels);
+    if (memoryOn) rpc("saurus_set_level", { p_learner: LEARNER, p_language: code, p_level: lv }).catch(memoryProblem);
+  }
+  function logStruggle(word, note) {
+    const w = String(word || "").trim().slice(0, 80);
+    if (!w) return;
+    const list = struggles[lang];
+    const hit = list.find((x) => x.word.toLowerCase() === w.toLowerCase());
+    if (hit) hit.misses++; else list.unshift({ word: w, note: note || null, misses: 1 });
+    if (memoryOn) rpc("saurus_log_struggle", { p_learner: LEARNER, p_language: lang, p_word: w, p_note: note ? String(note).slice(0, 200) : null }).catch(memoryProblem);
+  }
+  function struggleNote(code) {
+    const list = struggles[code].slice(0, 8);
+    if (!list.length) return "";
+    return "Words this learner got wrong or looked up before (most missed first): " +
+      list.map((x) => `${x.word}${x.note ? ` (${x.note})` : ""}${x.misses > 1 ? ` ×${x.misses}` : ""}`).join("; ") +
+      ". Early on, bring one of them back naturally and check they know it now; highlight it if it is on the page.";
+  }
 
   // ---------------------------------------------------------------------
   // Events
@@ -80,12 +133,16 @@
       { name: "celebrate", description: "Celebrate when the learner gets something right." },
       { name: "level_up", description: "Raise the learner's level in the current language when they clearly handle the current level with ease." },
       { name: "level_down", description: "Lower the learner's level when they are clearly struggling or ask for easier." },
+      { name: "log_struggle", description: "Remember a word or form the learner got wrong or did not know, so it can be practised in later sessions. Call it every time that happens.",
+        parameters: { type: "OBJECT", properties: { word: { type: "STRING", description: "The target-language word or short phrase" }, note: { type: "STRING", description: "What went wrong, in a few words" } }, required: ["word"] } },
       { name: "offer_drill", description: "Offer a short five-minute drill when the learner keeps making the same kind of mistake.",
         parameters: { type: "OBJECT", properties: { topic: { type: "STRING", description: "What the drill practices, in a few words" } }, required: ["topic"] } },
     ],
   }];
 
   let page = { url: "", text: "" };
+  let lastTranslated = null;
+  let recall = null; // {word, until}: a remembered word to highlight once the page is translated
   let ws = null, live = false, running = false;
   let talking = false, inText = "", outText = "", speaking = false;
 
@@ -95,7 +152,8 @@
       `Their ${LANG[lang]} level is ${levels[lang]} of 4: ${LEVEL[levels[lang]]}. Speak ${LANG[lang]} at exactly that level.`,
       "Talk about the substance of the page they are reading (the argument, what was decided, what they think), never textbook filler.",
       "Keep each turn short: one to three sentences, usually ending with one question. Correct mistakes gently by repeating the correct form.",
-      "Use your tools silently while you talk: highlight words on the page you discuss or the learner struggles with; celebrate correct answers; level_up or level_down when their level clearly changes; offer_drill when the same mistake repeats.",
+      "Use your tools silently while you talk: highlight words on the page you discuss or the learner struggles with; log_struggle whenever they get a word wrong or don't know it; celebrate correct answers; level_up or level_down when their level clearly changes; offer_drill when the same mistake repeats.",
+      struggleNote(lang),
       "If the learner switches language or asks for easier/harder, follow them.",
       `The page (${page.url}):\n"""\n${page.text.slice(0, 8000)}\n"""`,
     ].join("\n");
@@ -207,6 +265,7 @@
       case "celebrate": emit("celebrate"); return "celebrated";
       case "level_up": return changeLevel(+1);
       case "level_down": return changeLevel(-1);
+      case "log_struggle": logStruggle(args.word, args.note); return "remembered";
       case "offer_drill": emit("drill_offer", { topic: String(args.topic || "this page") }); return "offered; wait for the learner's answer";
       default: return "unknown tool";
     }
@@ -216,7 +275,7 @@
     const next = Math.max(1, Math.min(4, levels[lang] + delta));
     if (next === levels[lang]) return `already at level ${next}`;
     levels[lang] = next;
-    save("saurus.levels", levels);
+    saveLevel(lang, next);
     emit("level", { language: lang, level: next });
     if (delta > 0) emit("celebrate");
     return `level is now ${next}: ${LEVEL[next]}`;
@@ -260,6 +319,11 @@
       .map((p) => p.text || "").join("");
     const out = JSON.parse(text);
     if (!Array.isArray(out)) throw new Error("Gemini returned no translation");
+    for (const item of out) {
+      for (const m of String((item && item.html) || "").matchAll(/<mark>([^<]+)<\/mark>/gi)) {
+        for (const w of m[1].split(/[^\p{L}\p{M}'’-]+/u)) if (w) marked.add(w.toLowerCase());
+      }
+    }
     return out;
   }
 
@@ -273,21 +337,36 @@
       talking = false; inText = ""; outText = ""; speaking = false;
       setState("thinking");
       try {
+        await loadMemory(lang); // before connecting, so the session knows level and struggles
+      } catch (e) {
+        memoryProblem(e);
+      }
+      try {
         await connect();
       } catch (e) {
         setState("idle");
         throw e;
       }
       if (!running) { close(); throw new Error("stopped"); }
-      say("(I just opened you on this page. Greet me in one short sentence and ask me one question about what I'm reading.)");
+      const old = struggles[lang][0];
+      say(old
+        ? `(I just opened you on this page. Greet me in one short sentence, then remind me of "${old.word}", which I got wrong last time, and check I know it now, ideally using the page.)`
+        : "(I just opened you on this page. Greet me in one short sentence and ask me one question about what I'm reading.)");
+      // highlight it as translated text arrives (it only shows if it is on the page)
+      recall = old ? { word: old.word, until: Date.now() + 20000 } : null;
       return { language: lang, level: levels[lang] };
     },
 
     async translatePage({ blocks = [], language = lang, level = levels[lang] } = {}) {
+      if (language !== lastTranslated) { marked.clear(); lastTranslated = language; }
+      const done = async () => {
+        if (recall && Date.now() < recall.until && language === lang) emit("highlight", { text: recall.word });
+      };
       // batches of ~25 blocks in parallel keep it quick on long pages
       const batches = [];
       for (let i = 0; i < blocks.length; i += 25) batches.push(blocks.slice(i, i + 25));
       const results = await Promise.all(batches.map((b) => translateBatch(b, language, level)));
+      setTimeout(done, 0); // after Saurus has put this batch on the page
       return results.flat();
     },
 
@@ -320,23 +399,29 @@
     sendContext(ctx) {
       if (!live || !ctx || ctx.type !== "word_pressed") return;
       if (speaking) finishSaurus(true);
+      if (marked.has(String(ctx.word).toLowerCase())) logStruggle(ctx.word, "looked up"); // only target-language words
       say(`(I pressed the word "${ctx.word}" in this sentence: "${ctx.sentence}". Explain briefly what it means here, in ${LANG[lang]} at my level, then ask me to use it.)`);
       setState("thinking");
     },
 
-    setLanguage(code) {
+    async setLanguage(code) {
       if (!LANG[code] || code === lang) return;
       lang = code;
+      recall = null;
       save("saurus.language", code);
       emit("language", { code });
-      emit("level", { language: code, level: levels[code] });
       if (speaking) finishSaurus(true);
-      say(`(Switch now: from here on speak ${LANG[code]} with me. My ${LANG[code]} level is ${levels[code]} of 4: ${LEVEL[levels[code]]}. Greet me in ${LANG[code]} and continue our conversation about the page.)`);
       setState("thinking");
+      try { await loadMemory(code); } catch (e) { memoryProblem(e); }
+      if (lang !== code) return; // switched again meanwhile
+      emit("level", { language: code, level: levels[code] });
+      const note = struggleNote(code);
+      say(`(Switch now: from here on speak ${LANG[code]} with me. My ${LANG[code]} level is ${levels[code]} of 4: ${LEVEL[levels[code]]}.${note ? " " + note : ""} Greet me in ${LANG[code]} and continue our conversation about the page.)`);
     },
 
     stop() {
       running = false;
+      recall = null;
       close();
       talking = false; inText = ""; outText = ""; speaking = false;
       state = "idle";
