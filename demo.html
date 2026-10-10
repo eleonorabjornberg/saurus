@@ -27,9 +27,27 @@
   button{font:inherit;padding:8px 14px;border-radius:6px;border:0;background:var(--fg);color:var(--bg);cursor:pointer}
   footer{border-top:1px solid var(--line);padding:16px;text-align:center;font:14px/1.5 system-ui,sans-serif;color:var(--muted)}
   kbd{font:13px ui-monospace,Menlo,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px}
+  .try{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;padding:10px 16px;background:var(--bg);border-bottom:1px solid var(--line);font:14px/1.3 system-ui,sans-serif}
+  .try button{background:transparent;color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px}
+  .try button.go{background:#1F7A4D;border-color:#1F7A4D;color:#fff;font-weight:700}
+  .try .sep{width:1px;height:20px;background:var(--line)}
+  .try .hint{color:var(--muted)}
 </style>
 </head>
 <body>
+<div class="try" role="toolbar" aria-label="Try Saurus">
+  <button class="go" type="button" data-key="KeyS">🦕 Try Saurus</button>
+  <span class="sep"></span>
+  <button type="button" data-key="Digit1">Français</button>
+  <button type="button" data-key="Digit2">Deutsch</button>
+  <button type="button" data-key="Digit3">Español</button>
+  <button type="button" data-key="Digit4">Svenska</button>
+  <button type="button" data-key="Digit5">हिन्दी</button>
+  <span class="sep"></span>
+  <button type="button" data-key="ArrowDown" aria-label="Level down">Level −</button>
+  <button type="button" data-key="ArrowUp" aria-label="Level up">Level +</button>
+  <span class="hint">Then hold 🎙 and talk, or tap a word.</span>
+</div>
 <header class="site">
   <span class="logo">The Ledger</span>
   <nav aria-label="Sections">
@@ -85,6 +103,16 @@
 
 <footer>Saurus demo page. Press <kbd>Alt</kbd>+<kbd>S</kbd> to call Saurus.</footer>
 
+<script>
+  // Buttons for visitors without a keyboard shortcut (phones, tablets):
+  // they send the same Alt+key shortcuts Saurus listens for.
+  document.querySelector(".try").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-key]");
+    if (!b) return;
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: b.dataset.key, altKey: true, bubbles: true }));
+    b.blur();
+  });
+</script>
 <script src="config.js"></script>
 <script src="supabase-config.js"></script>
 <script src="backend.js"></script>
