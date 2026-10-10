@@ -751,27 +751,31 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     const who = l ? `${LANG_NAME[l]} · ${LEVEL_NAME[lv]}` : "Waking up…";
     ui.wrap.title = who;
     ui.wrap.setAttribute("aria-label", `Saurus, ${who}`);
-    if (!l) { setHTML(ui.art, avatarSVG(l, lv)); return; }
-    rememberLook(l, lv);
-    // Optional frames next to the base art: -blink (eyes closed), -talk (mouth open).
-    const url = (suffix) => assetUrl(`assets/saurus-${l}-${lv}${suffix}.png`);
-    // Keep the current picture until the new one is ready; the drawn
-    // fallback only shows if there is no picture for this language and age.
-    Promise.all(["", "-blink", "-talk"].map((sfx) => pngExists(url(sfx)))).then(([base, blink, talk]) => {
-      if (my !== artToken) return;
-      if (!base) { setHTML(ui.art, avatarSVG(l, lv)); return; }
-      const frame = (sfx, cls) => {
-        const img = document.createElement("img");
-        img.src = url(sfx);
-        img.alt = "";
-        img.draggable = false;
-        img.className = cls;
-        return img;
-      };
-      ui.art.replaceChildren(frame("", "f-base"),
-        ...(blink ? [frame("-blink", "f-blink")] : []),
-        ...(talk ? [frame("-talk", "f-talk")] : []));
-    });
+    if (l) rememberLook(l, lv);
+    // Pictures: assets/saurus-{lang}-{age}.png, with optional -blink (eyes
+    // closed) and -talk (mouth open) frames. Without one, the plain Saurus
+    // (assets/saurus-plain.png); the drawn pet only if that is missing too.
+    // The current picture stays until the new one is ready.
+    const pick = (name) => Promise.all(["", "-blink", "-talk"].map((sfx) => pngExists(assetUrl(`assets/${name}${sfx}.png`))))
+      .then((has) => (has[0] ? { name, has } : null));
+    (l ? pick(`saurus-${l}-${lv}`) : Promise.resolve(null))
+      .then((art) => art || pick("saurus-plain"))
+      .then((art) => {
+        if (my !== artToken) return;
+        if (!art) { setHTML(ui.art, avatarSVG(l, lv)); return; }
+        const frame = (sfx, cls) => {
+          const img = document.createElement("img");
+          img.src = assetUrl(`assets/${art.name}${sfx}.png`);
+          img.alt = "";
+          img.draggable = false;
+          img.className = cls;
+          return img;
+        };
+        const [, blink, talk] = art.has;
+        ui.art.replaceChildren(frame("", "f-base"),
+          ...(blink ? [frame("-blink", "f-blink")] : []),
+          ...(talk ? [frame("-talk", "f-talk")] : []));
+      });
   }
 
   let puffTimers = [];
