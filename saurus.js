@@ -1261,6 +1261,37 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // ---------------------------------------------------------------------
   // Summon / dismiss
   // ---------------------------------------------------------------------
+  // In the extension you must be signed in (auth-bridge.js): without an
+  // account, the Saurus popup opens to sign up or log in instead. The demo
+  // page (no extension) has no sign-in and opens straight away.
+  let checkingAccount = false;
+  function openSaurus() {
+    if (active || checkingAccount) return;
+    const acc = window.SaurusAccount;
+    if (!acc) { summon(); return; }
+    checkingAccount = true;
+    acc.require().then((state) => {
+      checkingAccount = false;
+      if (state && !active) summon();
+    }, (err) => {
+      checkingAccount = false;
+      build();
+      active = true;
+      ui.root.hidden = false;
+      ui.log.replaceChildren();
+      renderArt();
+      problem(`I couldn't check your account: ${errText(err)}.`);
+    });
+  }
+  try {
+    if (EXT_BASE && chrome.runtime && chrome.runtime.onMessage) {
+      chrome.runtime.onMessage.addListener((msg) => {
+        if (msg && msg.channel === "saurus-launch" && !active) openSaurus();   // "Open Saurus" in the popup
+        if (msg && msg.channel === "saurus-account-changed" && active) dismiss(); // signed out or switched account
+      });
+    }
+  } catch (_) {}
+
   function summon() {
     build();
     active = true;
@@ -1367,7 +1398,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       if (e.code === "KeyS") {
         e.preventDefault();
         e.stopPropagation();
-        if (!e.repeat) (active ? dismiss : summon)();
+        if (!e.repeat) (active ? dismiss : openSaurus)();
         return;
       }
       if (!active) return;

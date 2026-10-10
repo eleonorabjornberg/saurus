@@ -11,6 +11,7 @@
       "js": [
         "config.js",
         "supabase-config.js",
+        "auth-bridge.js",
         "backend.js",
         "backend-gemini.js",
         "backend-mock.js",
@@ -30,8 +31,9 @@
     }
   ],
   "permissions": [
-    "storage",
-    "offscreen"
+    "alarms",
+    "offscreen",
+    "storage"
   ],
   "background": {
     "service_worker": "background.js"
@@ -51,6 +53,8 @@
       "32": "icons/saurus-32.png",
       "48": "icons/saurus-48.png"
     },
-    "default_title": "Saurus: press Alt+S on any page"
-  }
+    "default_title": "Saurus: sign in, then press Alt+S on any page",
+    "default_popup": "popup.html"
+  },
+  "options_page": "popup.html"
 }
