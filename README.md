@@ -110,8 +110,10 @@ What `backend-gemini.js` does:
   activity detection), transcripts of both sides, and the page text in the
   system instructions. Tools the model calls while talking: `highlight`,
   `celebrate`, `level_up`, `level_down`, `offer_drill`.
-- **Translation:** Gemini Flash with structured JSON output, level 1 (a few
-  swapped words) to level 4 (natural full translation).
+- **Translation:** Gemini Flash with structured JSON output. Every level is
+  fully in the target language: level 1 very simple (A1), 2 simple (A2),
+  3 intermediate (B1), 4 natural and idiomatic. A few likely-new words per
+  paragraph are marked so they can be clicked.
 - **Memory:** level per language and the words you got wrong or looked up,
   in Supabase (below). Without Supabase, levels stay in this browser only.
 
