@@ -310,6 +310,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     }
     try { return be[name](...args); } catch (err) { problem(`Backend error in ${name}(): ${errText(err)}`); return undefined; }
   }
+  function setLang(code) {
+    callAsync("setLanguage", code).catch((err) => problem(`I couldn't switch language: ${errText(err)}.`));
+  }
+
   function callAsync(name, ...args) {
     const be = backend();
     if (!be || typeof be[name] !== "function") {
@@ -997,6 +1001,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   }
 
   let retranslateTimer = 0;
+  let langPending = false, langTimer = 0;
   function retranslateSoon() {
     clearTimeout(retranslateTimer);
     retranslateTimer = setTimeout(translateAll, 60);
@@ -1172,7 +1177,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       if (!d) return;
       const lv = Math.max(1, Math.min(4, Number(d.level) || 1));
       if (d.language && lang && d.language !== lang) return;
-      if (lv === level) return;
+      const waiting = langPending;
+      langPending = false;
+      clearTimeout(langTimer);
+      if (lv === level) { if (waiting && translated) retranslateSoon(); return; }
       level = lv;
       shownLevel = lv;
       renderArt();
@@ -1183,7 +1191,11 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       if (!code || code === lang) return;
       lang = code;
       puffSwap(() => { shownLang = code; shownLevel = level; renderArt(); });
-      if (translated) retranslateSoon();
+      // The new language's level follows in a "level" event: translate once,
+      // then (or after a moment if it never comes).
+      langPending = true;
+      clearTimeout(langTimer);
+      langTimer = setTimeout(() => { if (langPending) { langPending = false; if (translated) retranslateSoon(); } }, 2500);
     });
     on("drill_offer", (d) => drillOffer(d && d.topic));
     on("celebrate", celebrate);
@@ -1279,6 +1291,9 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   }
 
   window.addEventListener("keydown", (e) => {
+    // In the extension only real key presses count, so a website can't start
+    // Saurus or change its saved language (demo.html's buttons send fake ones).
+    if (EXT_BASE && !e.isTrusted) return;
     if (e.altKey && !e.ctrlKey && !e.metaKey) {
       if (e.code === "KeyS") {
         e.preventDefault();
@@ -1291,11 +1306,11 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
         ArrowUp: () => demo("levelUp"),
         ArrowDown: () => demo("levelDown"),
         KeyD: () => demo("drillOffer"),
-        Digit1: () => call("setLanguage", "fr"),
-        Digit2: () => call("setLanguage", "de"),
-        Digit3: () => call("setLanguage", "es"),
-        Digit4: () => call("setLanguage", "sv"),
-        Digit5: () => call("setLanguage", "hi"),
+        Digit1: () => setLang("fr"),
+        Digit2: () => setLang("de"),
+        Digit3: () => setLang("es"),
+        Digit4: () => setLang("sv"),
+        Digit5: () => setLang("hi"),
       }[e.code];
       if (action) {
         e.preventDefault();

@@ -89,7 +89,9 @@ Deno.serve(async (req) => {
   const m = path.match(/^\/v1beta\/models\/([^/:]+):generateContent$/);
   if (m && req.method === "POST") {
     if (!allowedModel(m[1])) return json(403, { error: { message: `model not allowed: ${m[1]}` } }, origin);
+    if (Number(req.headers.get("content-length") ?? 0) > 300_000) return json(413, { error: { message: "request too large" } }, origin);
     const body = await req.text();
+    if (body.length > 300_000) return json(413, { error: { message: "request too large" } }, origin);
     let res!: Response;
     for (const key of TEXT_KEYS) {
       res = await fetch(`${UPSTREAM}${path}?key=${encodeURIComponent(key)}`, {
