@@ -17,7 +17,7 @@
   // ---------------------------------------------------------------------
   // Constants
   // ---------------------------------------------------------------------
-  const LANG_NAME = { fr: "French", de: "German", es: "Spanish" };
+  const LANG_NAME = { fr: "French", de: "German", es: "Spanish", sv: "Swedish" };
   const LEVEL_NAME = { 1: "hatchling", 2: "juvenile", 3: "adult", 4: "elder" };
   const LEVEL_SIZE = { 1: 80, 2: 92, 3: 104, 4: 112 }; // px: desktop-pet sized, grows with level
   const CORNER_KEY = "saurus.corner";
@@ -63,6 +63,11 @@
         <circle class="d-dot" cx="40" cy="84" r="1.8"/><circle class="d-dot" cx="56" cy="80" r="1.8"/><circle class="d-dot" cx="72" cy="86" r="1.8"/><circle class="d-dot" cx="50" cy="93" r="1.8"/><circle class="d-dot" cx="80" cy="94" r="1.8"/>
         <path class="d-fan" d="M24 82 L4 68 A25 25 0 0 1 20 57 Z"/><path class="d-rib" d="M24 82 L9 61 M24 82 L14 58"/>
         <circle class="d-dress" cx="34" cy="7" r="5.5"/><circle class="d-fan" cx="34" cy="7" r="2"/></g>`,
+      sv: `<g class="costume"><path class="d-sweater" d="M21 72 Q56 54 92 74 L90 93 Q56 101 22 92 Z"/>
+        <path class="d-zig" d="M27 82 l5 -4 l5 4 l5 -4 l5 4 l5 -4 l5 4 l5 -4 l5 4 l5 -4 l5 4 l5 -4 l5 4"/>
+        <path class="d-dala" d="M6 94 L8 80 Q4 76 6 72 L10 70 L12 64 L16 68 Q22 70 22 76 L24 94 L19 94 L17 84 L12 84 L11 94 Z"/>
+        <path class="d-leaf" d="M32 9 Q45 -1 58 9"/><circle class="d-fl1" cx="33" cy="9" r="3"/><circle class="d-fl2" cx="39" cy="4.5" r="3"/>
+        <circle class="d-fl3" cx="45.5" cy="3" r="3"/><circle class="d-fl1" cx="52" cy="4.5" r="3"/><circle class="d-fl2" cx="57.5" cy="9" r="3"/></g>`,
     }[lang] || "";
     const specs = level >= 4
       ? `<g><circle class="d-specs" cx="40" cy="16" r="5.5"/><line class="d-specs" x1="34.5" y1="15" x2="27" y2="12"/></g>` : "";
@@ -91,12 +96,12 @@
   const TOKENS_LIGHT = `--bg:#EEF3EC; --surface:#FFFFFF; --fg:#14251C; --muted:#56695D; --line:#C9D6CC;
     --accent:#1F7A4D; --accent-ink:#FFFFFF; --belly:#BFE3CB; --mark:#FFDD55; --mark-ink:#2A2200;
     --dino:#8CC8F2; --dino-line:#2D5E9E; --dino-spot:#5D9FDB;
-    --glass:rgba(255,255,255,.74); --glass-u:rgba(240,246,250,.82); --glass-edge:rgba(255,255,255,.7); --glass-shadow:rgba(20,37,60,.22);
+    --glass:rgba(255,255,255,.94); --glass-u:rgba(242,247,251,.96); --glass-edge:rgba(255,255,255,.7); --glass-shadow:rgba(20,37,60,.22);
     --beret:#C8322B; --bread:#D9A24A; --shell:#FFFDF6; --puff:#FFFFFF; --leder:#7A4A21; --hat:#2F5D3A; --dress:#D0312D; --fan:#F2C94C;`;
   const TOKENS_DARK = `--bg:#0F1A14; --surface:#18271F; --fg:#E6EFE8; --muted:#9DB3A5; --line:#2C4035;
     --accent:#5FD08F; --accent-ink:#06170D; --belly:#1F5A3A; --mark:#E8C63A; --mark-ink:#1C1700;
     --dino:#8CC8F2; --dino-line:#2D5E9E; --dino-spot:#5D9FDB;
-    --glass:rgba(30,36,44,.72); --glass-u:rgba(40,48,58,.8); --glass-edge:rgba(255,255,255,.12); --glass-shadow:rgba(0,0,0,.45);
+    --glass:rgba(30,36,44,.94); --glass-u:rgba(40,48,58,.96); --glass-edge:rgba(255,255,255,.12); --glass-shadow:rgba(0,0,0,.45);
     --beret:#E2554D; --bread:#E0B060; --shell:#F3F0E4; --puff:#DCE8DF; --leder:#A66A35; --hat:#3F7A4E; --dress:#E2554D; --fan:#F2C94C;`;
 
   const CSS = `
@@ -170,7 +175,16 @@ button{font:inherit;color:inherit;cursor:pointer}
 .float{display:block;width:100%;height:100%;animation:float 4.2s ease-in-out infinite}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 .hop,.mover,.art{width:100%;height:100%;display:block;transform-origin:50% 100%}
+.art{position:relative}
 .art svg,.art img{width:100%;height:100%;display:block}
+.art img{position:absolute;inset:0}
+/* frame swaps: blink and mouth-open overlays on the base picture */
+.art .f-blink,.art .f-talk{opacity:0}
+.art.blink .f-blink{opacity:1}
+.art.talking .f-talk{opacity:1}
+.art.talking .f-blink{opacity:0}
+.speak-fallback[data-state="speaking"] .art .f-talk{animation:flap .36s steps(1) infinite}
+@keyframes flap{0%{opacity:1}50%{opacity:0}}
 .d-body{fill:var(--dino);stroke:var(--dino-line);stroke-width:3;stroke-linejoin:round}
 .d-leg2{fill:var(--dino-spot);stroke:var(--dino-line);stroke-width:3}
 .d-belly{fill:var(--dino-spot);stroke:var(--dino-line);stroke-width:2;stroke-linejoin:round}
@@ -185,6 +199,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .d-leder{fill:var(--leder)}.d-strap{fill:none;stroke:var(--leder) !important;stroke-width:4 !important}
 .d-hat{fill:var(--hat)}.d-feather{fill:none;stroke:var(--beret) !important;stroke-width:3 !important}
 .d-dress{fill:var(--dress)}.d-dot{fill:var(--shell);stroke:none !important}
+.d-sweater{fill:#2F5DA8}.d-zig{fill:none;stroke:var(--fan) !important;stroke-width:2.2 !important}.d-dala{fill:var(--beret)}
+.d-leaf{fill:none;stroke:#3F8A4A !important;stroke-width:3 !important}.d-fl1{fill:#fff}.d-fl2{fill:var(--fan)}.d-fl3{fill:#F2A7C3}
 .d-fan{fill:var(--fan)}.d-rib{fill:none;stroke-width:1.2 !important}
 .eye{transform-box:fill-box;transform-origin:center;transition:transform .07s}
 .blink .eye{transform:scaleY(.1)}
@@ -217,7 +233,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 @keyframes pop{0%{transform:scale(1)}30%{transform:scale(.7)}62%{transform:scale(1.12)}100%{transform:scale(1)}}
 
 @media (prefers-reduced-motion: reduce){
-  .saurus,.caret::after,.puffing .puff i,.puffing .art,.mover,.hop,.celebrating .hop,.d-mouth,.float,.ctl.held svg{animation:none !important}
+  .saurus,.caret::after,.puffing .puff i,.puffing .art,.mover,.hop,.celebrating .hop,.d-mouth,.float,.ctl.held svg,.art .f-talk{animation:none !important}
   [data-state="listening"] .mover{transform:none}
   .log{scroll-behavior:auto;transition:none}
   .dino-wrap{transition:none}
@@ -266,7 +282,11 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       problem(be ? `The backend has no ${name}() method.` : "No backend found (window.SaurusBackend is missing).");
       return undefined;
     }
-    try { return be[name](...args); } catch (err) { problem(`Backend error in ${name}(): ${errText(err)}`); return undefined; }
+    try {
+      const result = be[name](...args);
+      if (result && typeof result.catch === "function") result.catch((err) => problem(errText(err)));
+      return result;
+    } catch (err) { problem(`Backend error in ${name}(): ${errText(err)}`); return undefined; }
   }
   function callAsync(name, ...args) {
     const be = backend();
@@ -630,14 +650,21 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     ui.wrap.title = who;
     ui.wrap.setAttribute("aria-label", `Saurus, ${who}`);
     if (!l) return;
-    const url = assetUrl(`assets/saurus-${l}-${lv}.png`);
-    pngExists(url).then((ok) => {
-      if (!ok || my !== artToken) return;
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = "";
-      img.draggable = false;
-      ui.art.replaceChildren(img);
+    // Optional frames next to the base art: -blink (eyes closed), -talk (mouth open).
+    const url = (suffix) => assetUrl(`assets/saurus-${l}-${lv}${suffix}.png`);
+    Promise.all(["", "-blink", "-talk"].map((sfx) => pngExists(url(sfx)))).then(([base, blink, talk]) => {
+      if (!base || my !== artToken) return;
+      const frame = (sfx, cls) => {
+        const img = document.createElement("img");
+        img.src = url(sfx);
+        img.alt = "";
+        img.draggable = false;
+        img.className = cls;
+        return img;
+      };
+      ui.art.replaceChildren(frame("", "f-base"),
+        ...(blink ? [frame("-blink", "f-blink")] : []),
+        ...(talk ? [frame("-talk", "f-talk")] : []));
     });
   }
 
@@ -657,7 +684,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     avatarState = s;
     if (!ui) return;
     ui.root.dataset.state = s;
-    if (s !== "speaking") { ui.mover.style.transform = ""; ui.art.style.setProperty("--m", "0"); }
+    if (s !== "speaking") { ui.mover.style.transform = ""; ui.art.style.setProperty("--m", "0"); ui.art.classList.remove("talking"); }
   }
 
   let celebrateTimer = 0;
@@ -701,6 +728,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     loud += (Math.min(1, rms * 5) - loud) * 0.35;
     ui.mover.style.transform = `translateY(${(-loud * 6).toFixed(2)}px) scale(${(1 - loud * 0.03).toFixed(3)},${(1 + loud * 0.05).toFixed(3)})`;
     ui.art.style.setProperty("--m", Math.min(1, loud * 1.6).toFixed(2));
+    // mouth-open frame while the voice is loud (with a little hysteresis)
+    const open = ui.art.classList.contains("talking");
+    if (!open && loud > 0.14) ui.art.classList.add("talking");
+    else if (open && loud < 0.08) ui.art.classList.remove("talking");
   }
 
   // ---------------------------------------------------------------------
@@ -710,7 +741,13 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     try { const c = localStorage.getItem(CORNER_KEY); if (/^[tb][lr]$/.test(c)) return c; } catch (_) {}
     return "br";
   }
-  function saveCorner(c) { try { localStorage.setItem(CORNER_KEY, c); } catch (_) {} }
+  function saveCorner(c) {
+    if (window.SaurusAccount && lang) {
+      window.SaurusAccount.memory("preferences", { language: lang, corner: c }).catch((error) => problem(errText(error)));
+      return;
+    }
+    try { localStorage.setItem(CORNER_KEY, c); } catch (_) {}
+  }
 
   function initDrag() {
     let drag = null;
@@ -819,39 +856,59 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     return frag;
   }
 
+  // Translate in small batches, what's on screen first, and show each batch
+  // as soon as it arrives (long pages would otherwise sit grey for ages).
+  const BATCH = 8, PARALLEL = 3, MAX_BLOCKS = 150;
   function translateAll() {
     if (!active || !lang || !blocks.length) return;
     const my = ++trToken;
-    for (const b of blocks) b.el.classList.add("saurus-pending");
-    callAsync("translatePage", { blocks: blocks.map(({ id, text }) => ({ id, text })), language: lang, level })
-      .then((res) => {
-        if (my !== trToken || !active) return;
-        if (!Array.isArray(res)) throw new Error("translatePage() did not return an array");
-        clearHighlights();
-        for (const item of res) {
-          const b = item && byId.get(item.id);
-          if (!b || typeof item.html !== "string") continue;
-          if (!b.tr) {
-            b.orig = document.createElement("span");
-            b.orig.className = "saurus-orig";
-            b.orig.hidden = true;
-            b.orig.append(...b.el.childNodes);
-            b.tr = document.createElement("span");
-            b.tr.className = "saurus-tr";
-            b.el.append(b.tr, b.orig);
-          }
-          b.tr.replaceChildren(htmlToFragment(item.html));
+    const vh = window.innerHeight;
+    const dist = (b) => {
+      const r = b.el.getBoundingClientRect();
+      return r.bottom < 0 ? -r.bottom + vh : r.top > vh ? r.top - vh : 0; // 0 = on screen
+    };
+    const order = blocks.map((b, i) => ({ b, d: dist(b), i }))
+      .sort((x, y) => x.d - y.d || x.i - y.i).slice(0, MAX_BLOCKS).map((x) => x.b);
+    const queue = [];
+    for (let i = 0; i < order.length; i += BATCH) queue.push(order.slice(i, i + BATCH));
+    clearHighlights();
+    for (const b of order) b.el.classList.add("saurus-pending");
+    let failed = false;
+    const apply = (res) => {
+      if (!Array.isArray(res)) throw new Error("translatePage() did not return an array");
+      for (const item of res) {
+        const b = item && byId.get(item.id);
+        if (!b || typeof item.html !== "string") continue;
+        if (!b.tr) {
+          b.orig = document.createElement("span");
+          b.orig.className = "saurus-orig";
+          b.orig.hidden = true;
+          b.orig.append(...b.el.childNodes);
+          b.tr = document.createElement("span");
+          b.tr.className = "saurus-tr";
+          b.el.append(b.tr, b.orig);
         }
-        translated = true;
-      })
-      .catch((err) => {
-        if (my !== trToken || !active) return;
-        problem(`I couldn't translate this page: ${errText(err)}.`);
-      })
-      .finally(() => {
-        if (my !== trToken) return;
-        for (const b of blocks) b.el.classList.remove("saurus-pending");
-      });
+        b.tr.replaceChildren(htmlToFragment(item.html));
+        b.el.classList.remove("saurus-pending");
+      }
+      translated = true;
+    };
+    const worker = async () => {
+      while (queue.length && my === trToken && active) {
+        const batch = queue.shift();
+        try {
+          const res = await callAsync("translatePage", { blocks: batch.map(({ id, text }) => ({ id, text })), language: lang, level });
+          if (my !== trToken || !active) return;
+          apply(res);
+        } catch (err) {
+          if (my !== trToken || !active) return;
+          if (!failed) { failed = true; problem(`I couldn't translate part of this page: ${errText(err)}.`); }
+        } finally {
+          for (const b of batch) b.el.classList.remove("saurus-pending");
+        }
+      }
+    };
+    for (let i = 0; i < PARALLEL; i++) worker();
   }
 
   let retranslateTimer = 0;
@@ -1051,7 +1108,20 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // ---------------------------------------------------------------------
   // Summon / dismiss
   // ---------------------------------------------------------------------
-  function summon() {
+  let checkingAccount = false;
+  async function summon() {
+    if (active || checkingAccount) return;
+    if (window.SaurusAccount) {
+      checkingAccount = true;
+      try {
+        const account = await window.SaurusAccount.require();
+        if (!account) return;
+        build();
+        ui.root.dataset.corner = /^[tb][lr]$/.test(account.profile.preferences?.corner) ? account.profile.preferences.corner : "br";
+      } catch (error) {
+        build(); ui.root.hidden = false; problem(errText(error)); return;
+      } finally { checkingAccount = false; }
+    }
     build();
     active = true;
     const my = ++session;
@@ -1113,6 +1183,17 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     if (ui) { ui.root.hidden = true; ui.wrap.classList.remove("puffing"); }
   }
 
+  if (typeof chrome !== "undefined" && chrome.runtime?.id) {
+    chrome.runtime.onMessage.addListener((message, _sender, respond) => {
+      if (message?.channel === "saurus-launch") {
+        summon(); respond({ ok: true });
+      }
+      if (message?.channel === "saurus-account-changed" && ["SIGNED_OUT", "SIGNED_IN"].includes(message.event)) {
+        dismiss();
+      }
+    });
+  }
+
   // ---------------------------------------------------------------------
   // Keyboard: Alt+S, Space push-to-talk, hidden demo controls
   // ---------------------------------------------------------------------
@@ -1150,6 +1231,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
         Digit1: () => call("setLanguage", "fr"),
         Digit2: () => call("setLanguage", "de"),
         Digit3: () => call("setLanguage", "es"),
+        Digit4: () => call("setLanguage", "sv"),
       }[e.code];
       if (action) {
         e.preventDefault();

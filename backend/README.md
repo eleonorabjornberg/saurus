@@ -53,7 +53,13 @@ curl http://127.0.0.1:3000/api/learning/progress
 3. Adapt Article B. Stored difficult vocabulary is included as bounded model context.
 4. Submit a correct recall and inspect progress or the next action.
 
-Mastery changes by `+15` for a correct recall and `-10` for an incorrect recall, clamped to 0–100. A word is learned at mastery 70+ with more correct than incorrect recalls. A word is struggling after at least one incorrect recall when it is below that learned threshold. Avatar stages are derived from learned-word count: `egg`, `hatchling` (3), `explorer` (10), and `language-saurus` (20).
+Mastery changes by `+15` for a correct recall and `-10` for an incorrect recall, clamped to 0–100. A word is learned at mastery 70+ with more correct than incorrect recalls. A word is struggling after at least one incorrect recall when it is below that learned threshold. Progress labels use the product's four ages: `hatchling`, `juvenile` (3 learned words), `adult` (10), and `elder` (20). These labels report learning progress but do not override the extension's per-language manual level.
+
+## Memory ownership and legacy-table synchronization
+
+`vocabulary` is the canonical detailed recall record because it owns mastery and correct/incorrect counters. The extension never writes Supabase directly. `saurus_struggles` should be treated as a compatibility projection, not a second source of truth: one row per normalized `(learner, language, word)` derived from `vocabulary`, and `saurus_progress` remains authoritative only for the teammate system's per-language UI/session progress.
+
+The current repository does not contain the column definitions for `saurus_struggles` or `saurus_progress`, so this backend deliberately does not guess their shape or dual-write them. Once that schema is available, synchronization should be added server-side as a database view or transaction/trigger from `vocabulary`; clients must never independently update both tables. This avoids duplicate rows and contradictory counters while preserving the existing tables.
 
 ## Tests
 

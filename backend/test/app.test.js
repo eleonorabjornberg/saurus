@@ -24,6 +24,10 @@ function fixtures(initialWords = []) {
       calls.adapt.push(input);
       return { adaptedText: "Texto sencillo", vocabularyHighlights: [], comprehensionQuestion: "¿Qué pasó?" };
     },
+    async adaptBlocks(input) {
+      calls.adapt.push(input);
+      return { blocks: input.blocks.map(({ id, text }) => ({ id, html: text })), vocabularyHighlights: [], comprehensionQuestion: "¿Qué pasó?" };
+    },
     async evaluateRecall(input) {
       calls.evaluate.push(input);
       const correct = input.answer.toLowerCase() === "although";
@@ -57,6 +61,13 @@ test("adaptation gives stored mistakes to Gemini", async (t) => {
   const response = await app.inject({ method: "POST", url: "/api/reading/adapt", payload: { articleText: "Aunque llueve, caminamos por el parque esta mañana." } });
   assert.equal(response.statusCode, 200);
   assert.equal(f.calls.adapt[0].struggles[0].word, "aunque");
+});
+
+test("block adaptation preserves the extension block contract", async (t) => {
+  const f = fixtures(); const app = await buildApp(f); t.after(() => app.close());
+  const response = await app.inject({ method: "POST", url: "/api/reading/adapt", payload: { blocks: [{ id: "b1", text: "A sufficiently useful article sentence." }] } });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json().blocks, [{ id: "b1", html: "A sufficiently useful article sentence." }]);
 });
 
 test("next action returns a reading when no words are struggling", async (t) => {

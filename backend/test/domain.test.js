@@ -34,5 +34,5 @@ test("progress derives learned, struggling, and avatar stage from existing colum
   const progress = classifyProgress(words);
   assert.equal(progress.learnedWords.length, 3);
   assert.equal(progress.strugglingWords[0].word, "aunque");
-  assert.equal(progress.avatarStage, "hatchling");
+  assert.equal(progress.avatarStage, "juvenile");
 });

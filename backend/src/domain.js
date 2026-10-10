@@ -18,7 +18,7 @@ export function classifyProgress(words) {
   const learnedWords = words.filter((word) => Number(word.mastery_score) >= 70 && Number(word.correct_recalls) > Number(word.incorrect_recalls));
   const strugglingWords = words.filter((word) => Number(word.incorrect_recalls) > 0 && (Number(word.mastery_score) < 70 || Number(word.incorrect_recalls) >= Number(word.correct_recalls)));
   const learnedCount = learnedWords.length;
-  const avatarStage = learnedCount >= 20 ? "language-saurus" : learnedCount >= 10 ? "explorer" : learnedCount >= 3 ? "hatchling" : "egg";
+  const avatarStage = learnedCount >= 20 ? "elder" : learnedCount >= 10 ? "adult" : learnedCount >= 3 ? "juvenile" : "hatchling";
   return { learnedWords, strugglingWords, avatarStage };
 }
 

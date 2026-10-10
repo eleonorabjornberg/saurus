@@ -1,5 +1,9 @@
 # Saurus
 
+**Account setup:** see [AUTH_SETUP.md](AUTH_SETUP.md) for the new extension
+sign-up/login flow, persistent sessions, migration approval requirements, and
+the exact test/deployment checklist. The account migration has not been deployed.
+
 **A patient, fluent friend who lives in your browser, knows what you're
 reading, remembers what you get wrong, and meets you where you're at.**
 
@@ -35,7 +39,7 @@ Press a shortcut on any page and a small dino appears.
 5. **Grows with you.** The avatar's age *is* your level (hatchling,
    juvenile, adult, elder), and it changes costume per language: beret and
    baguette for French, lederhosen for German, flamenco dress and fan for
-   Spanish.
+   Spanish, with dedicated Swedish artwork as well.
 
 No new app, no lessons to schedule: it rides along with what you already read.
 
@@ -49,8 +53,10 @@ No new app, no lessons to schedule: it rides along with what you already read.
   both sides, calling tools while it talks (highlight a word, log a
   struggle, level up). Gemini Flash with structured output picks which
   words to swap for the page translation.
-- **Memory:** Supabase stores level, struggle words and session summaries
-  per language.
+- **Memory:** the teammate Supabase flow remains authoritative for per-language
+  levels, struggles, and next-action practice. The optional local Fastify server
+  can add vocabulary mastery and recall evaluation when
+  `enableFastifyPractice` is explicitly enabled.
 - The front end talks to the backend only through `window.SaurusBackend`
   (interface below). `backend-mock.js` implements it offline with scripted
   replies, which is what the live demo runs on.
@@ -59,49 +65,83 @@ No new app, no lessons to schedule: it rides along with what you already read.
 |---|---|
 | `saurus.js` | The whole widget. One `<script>` tag injects it into any page (shadow DOM). |
 | `config.js` | Settings: Gemini API key (empty in git, never commit one), proxy URL, models, starting language. |
-| `backend.js` | Slot for a custom backend (e.g. Supabase). Empty for now. |
+| `background.js` | MV3 service worker and allow-listed bridge to the local API. |
+| `backend.js` | Composes server learning features with the existing voice backend. |
 | `backend-gemini.js` | The live backend: Gemini Live voice + Gemini Flash translation. Used when `config.js` has a key or `apiBase`. |
 | `backend-mock.js` | A fake `SaurusBackend` with scripted replies and a synthetic voice. Used when nothing above is configured. |
 | `demo.html` | An article page that loads both. |
 | `manifest.json` | Chrome extension (Manifest V3) that injects both as content scripts. |
-| `assets/` | Optional avatar art: `saurus-{fr,de,es}-{1..4}.png`. Missing files fall back to the built-in SVG. |
+| `assets/` | Optional avatar art: `saurus-{fr,de,es,sv}-{1..4}.png`. Missing files fall back to the built-in SVG. |
 
-## Run it locally
+## Run the complete local demo
+
+```sh
+cp backend/.env.example backend/.env
+# Fill backend/.env with GEMINI_API_KEY, SUPABASE_URL and SUPABASE_SECRET_KEY.
+npm --prefix backend install
+npm --prefix backend start
+```
+
+Then open `chrome://extensions`, enable Developer mode, choose **Load
+unpacked**, and select this repository. Reload the extension after code
+changes, refresh a normal webpage, and press **Alt+S**. The demo learner must
+be a Supabase `learner_profiles` row with `target_language = Spanish` and
+`cefr_level = A1`.
+
+The extension calls only `http://127.0.0.1:3000` through its MV3 service
+worker. Verify the server separately with `curl http://127.0.0.1:3000/health`.
+When Spanish is selected and stored vocabulary needs practice, Saurus shows an
+optional typed recall prompt. Its answer is evaluated and persisted by Fastify.
+Clicking a translated word and normal spoken conversation continue through the
+existing Gemini Live backend.
+
+For the standalone mock page (no server integration guarantees):
 
 ```sh
 python3 -m http.server 8000
-# open http://localhost:8000/demo.html and press Alt+S
+# open http://localhost:8000/demo.html
 ```
-
-Use `localhost` (not `file://`) so the browser allows the microphone.
 
 As an extension: `chrome://extensions` → Developer mode → **Load unpacked** →
 pick this folder. Press Alt+S on any page.
 
 ## Use the real Gemini backend
 
-Load order: `config.js` → `backend.js` → `backend-gemini.js` →
-`backend-mock.js` → `saurus.js`. The first backend that sets
-`window.SaurusBackend` wins, so the mock only runs when nothing else is set up.
+Load order: `config.js` → `supabase-config.js` → `backend-gemini.js` →
+`backend-mock.js` → `backend.js` → `saurus.js`. `backend.js` captures and delegates to the voice
+backend, then adds the server-backed learning operations. This ordering is
+intentional: do not move `backend.js` ahead of Gemini Live.
 
-**Local demo with your own key** (never push it, the repo is public):
-
-```sh
-# in the saurus folder: paste your key between the quotes of geminiApiKey in config.js, then
-git update-index --skip-worktree config.js   # git now ignores your local edit
-```
-
-Reload the extension in `chrome://extensions` and refresh the tab.
-
-**Keys in Supabase (production):** leave `geminiApiKey` empty and set
-`apiBase` to a Supabase Edge Function that forwards to
-`https://generativelanguage.googleapis.com` with the key added server-side.
-It must proxy two paths:
+Do not place a private Gemini key in `config.js` or `supabase-config.js`.
+`supabase-config.js` selects the `gemini` Edge Function and contains only the
+browser-safe project URL and publishable key. The function proxies two paths:
 
 - `POST /v1beta/models/{model}:generateContent` (page translation)
 - the WebSocket `/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent` (Gemini Live)
 
-…and send CORS headers. Store the key with `supabase secrets set GEMINI_API_KEY=...`.
+It checks the project publishable key, restricts models, applies CORS, bounds
+request/queue sizes, and keeps the WebSocket worker alive. The browser reconnects
+up to three times and carries recent conversation text into the new session.
+
+Deploy it to the project referenced by `supabase/config.toml`:
+
+```sh
+supabase login
+supabase link --project-ref hwsiplosbvlsktxxsmxd
+# Put GEMINI_API_KEY, GEMINI_MODELS and (optionally) ALLOWED_ORIGINS in
+# supabase/functions/.env, which is ignored by git, then upload them:
+supabase secrets set --env-file supabase/functions/.env
+supabase secrets list
+supabase functions deploy gemini --no-verify-jwt
+```
+
+`GEMINI_API_KEY` is required. `GEMINI_MODELS` and `ALLOWED_ORIGINS` are
+optional; use `GEMINI_MODELS=gemini-3.8-live,gemini-3.8-flash`. For a fixed
+demo site, set `ALLOWED_ORIGINS=https://your-demo.example`; omit it only when
+Saurus must run across arbitrary pages. WebSocket clients cannot attach the normal authorization header, so
+JWT verification is disabled for this one function; the function validates the
+browser-safe project publishable key itself. After deploying, reload the
+extension in `chrome://extensions` and refresh the page.
 
 What `backend-gemini.js` does:
 - **Voice:** one Gemini Live session per summon, with push-to-talk (manual
@@ -126,9 +166,17 @@ What `backend-gemini.js` does:
 | Click a bubble | Expands / collapses it. Scroll the bubbles to see older ones. |
 | Alt+↑ / Alt+↓ | Demo: level up / down (`SaurusBackend.demo.levelUp/levelDown`). |
 | Alt+D | Demo: drill offer (`SaurusBackend.demo.drillOffer`). |
-| Alt+1 / 2 / 3 | Switch to French / German / Spanish (`setLanguage`). |
+| Alt+1 / 2 / 3 / 4 | Switch to French / German / Spanish / Swedish (`setLanguage`). |
 
 Mock only: typing `/error` makes the mock emit an `error` event.
+
+## Tests
+
+```sh
+npm test                    # extension/service-worker contracts
+npm --prefix backend test   # Fastify, domain, and Gemini service tests
+npm run test:all            # both suites
+```
 
 ---
 
@@ -173,7 +221,7 @@ window.SaurusBackend = {
   endOfSpeech()
   sendText(text)
   sendContext({ type: "word_pressed", word, sentence })
-  setLanguage(code)                       // "fr" | "de" | "es"
+  setLanguage(code)                       // "fr" | "de" | "es" | "sv"
   stop()
   on(eventName, handler)
 
@@ -190,7 +238,7 @@ window.SaurusBackend = {
 | `endOfSpeech()` | Button / Space released | Only called if at least one chunk was sent. |
 | `sendText(text)` | Muted mode, Enter; also the drill buttons send `"Yes"` / `"Not now"` | The front end shows the user's bubble itself; **do not** echo typed text back as a `transcript`. |
 | `sendContext({type, word, sentence})` | A word on the page is clicked | `sentence` is the sentence around the word, as currently shown (translated or not). |
-| `setLanguage(code)` | Alt+1/2/3 | Reply with a `language` event (and a `level` event for that language). |
+| `setLanguage(code)` | Alt+1/2/3/4 | Reply with a `language` event (and a `level` event for that language). |
 | `stop()` | Alt+S (dismiss) | Close the session. Events emitted after this are ignored. |
 | `on(name, handler)` | Once per backend object | Keep a list of handlers per event. No `off` needed. |
 | `demo.*` | Alt+↑, Alt+↓, Alt+D | Optional. If missing, Saurus says the shortcut isn't supported. Fire the same events you would normally (`level` + `celebrate`, `drill_offer`). |

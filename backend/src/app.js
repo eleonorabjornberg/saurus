@@ -36,12 +36,13 @@ export async function buildApp({ store, gemini, allowedOrigins = [], logger = fa
   app.get("/api/learner", async (_request, reply) => learnerOr404(reply));
 
   app.post("/api/reading/adapt", { preHandler: localOnly }, async (request, reply) => {
-    const { articleText } = AdaptRequestSchema.parse(request.body);
+    const input = AdaptRequestSchema.parse(request.body);
     const learner = await learnerOr404(reply);
     if (!learner) return;
     const vocabulary = await store.getVocabulary(learner.id);
     const struggles = classifyProgress(vocabulary).strugglingWords.slice(0, 20).map(({ word, translation, mastery_score, incorrect_recalls, correct_recalls }) => ({ word, translation, mastery_score, incorrect_recalls, correct_recalls }));
-    return gemini.adaptArticle({ articleText, learner, struggles });
+    if ("blocks" in input) return gemini.adaptBlocks({ blocks: input.blocks, learner, struggles });
+    return gemini.adaptArticle({ articleText: input.articleText, learner, struggles });
   });
 
   app.post("/api/vocabulary/recall", { preHandler: localOnly }, async (request, reply) => {

@@ -3,10 +3,18 @@
   "name": "Saurus",
   "version": "0.1.0",
   "description": "A patient language tutor that lives in your browser. Press Alt+S to call Saurus.",
+  "permissions": ["storage", "alarms", "activeTab"],
+  "host_permissions": ["http://127.0.0.1:3000/*", "https://hwsiplosbvlsktxxsmxd.supabase.co/*"],
+  "action": { "default_popup": "popup.html", "default_title": "Open Saurus" },
+  "options_page": "popup.html",
+  "minimum_chrome_version": "120",
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["config.js", "backend.js", "backend-gemini.js", "backend-mock.js", "saurus.js"],
+      "js": ["config.js", "supabase-config.js", "auth-bridge.js", "backend-gemini.js", "backend-mock.js", "backend.js", "saurus.js"],
       "run_at": "document_idle"
     }
   ],
