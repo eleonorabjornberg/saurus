@@ -14,4 +14,8 @@ window.SAURUS_SUPABASE = {
   url: "https://hwsiplosbvlsktxxsmxd.supabase.co",
   anonKey: "sb_publishable_TAps0Sn1VMTxIZAKK3tQVg_t_iBGLcL",
   learner: "demo",  // whose memory to use (one shared demo learner)
+  // true once the "gemini" Edge Function is deployed with the GEMINI_API_KEY
+  // secret: Saurus then uses Gemini through Supabase and needs no local key.
+  // (A key in config.js still takes priority.)
+  gemini: false,
 };

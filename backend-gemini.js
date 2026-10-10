@@ -6,20 +6,24 @@
  * celebrate). Page translation: Gemini Flash with structured JSON output.
  *
  * Active when config.js sets geminiApiKey (direct to Google) or apiBase (a
- * proxy, e.g. a Supabase Edge Function that adds the key server-side), and
- * no other backend (backend.js) has set window.SaurusBackend first.
- * Levels and language are remembered in localStorage.
+ * proxy), or supabase-config.js turns on the "gemini" Supabase Edge Function
+ * (key kept in Supabase), and no other backend (backend.js) has set
+ * window.SaurusBackend first.
  */
 (function () {
   "use strict";
   if (window.SaurusBackend) return;
   const cfg = window.SAURUS_CONFIG || {};
-  if (!cfg.geminiApiKey && !cfg.apiBase) return; // no key and no proxy: the mock runs
+  const sbCfg = window.SAURUS_SUPABASE || {};
+  // A local key wins; otherwise the Supabase Edge Function, if switched on.
+  const viaSupabase = !cfg.geminiApiKey && !cfg.apiBase && sbCfg.gemini && sbCfg.url;
+  if (!cfg.geminiApiKey && !cfg.apiBase && !viaSupabase) return; // nothing configured: the mock runs
 
   const KEY = encodeURIComponent(cfg.geminiApiKey || "");
   const LIVE_MODEL = cfg.liveModel || "gemini-3.8-live";
   const TEXT_MODEL = cfg.textModel || "gemini-3.8-flash";
-  const API = (cfg.apiBase || "https://generativelanguage.googleapis.com").replace(/\/$/, "");
+  const API = (viaSupabase ? String(sbCfg.url).replace(/\/$/, "") + "/functions/v1/gemini"
+    : (cfg.apiBase || "https://generativelanguage.googleapis.com")).replace(/\/$/, "");
   const WS_URL = API.replace(/^http/, "ws") +
     "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + KEY;
   const REST_URL = (model) => `${API}/v1beta/models/${model}:generateContent?key=${KEY}`;
@@ -171,7 +175,15 @@
   let recall = null; // {word, until}: a remembered word to highlight once the page is translated
   let ws = null, live = false, running = false;
   let talking = false, inText = "", outText = "", speaking = false;
+  const history = []; // last exchanges, to carry the conversation over a reconnect
+  let reconnects = 0;
+  function remember(who, text) {
+    if (!text) return;
+    history.push(`${who}: ${text}`);
+    if (history.length > 12) history.shift();
+  }
 
+  let resuming = false;
   function instructions() {
     return [
       `You are Saurus, a small, warm, patient dinosaur who tutors languages. The learner is learning ${LANG[lang]}.`,
@@ -182,6 +194,9 @@
       struggleNote(lang),
       "If the learner switches language or asks for easier/harder, follow them.",
       `The page (${page.url}):\n"""\n${page.text.slice(0, 8000)}\n"""`,
+      resuming && history.length
+        ? `The connection just dropped and came back. Conversation so far (continue it; do not greet again):\n${history.join("\n")}`
+        : "",
     ].join("\n");
   }
 
@@ -226,9 +241,28 @@
         if (sock !== ws) return;
         ws = null; live = false;
         if (!ready) reject(new Error(why));
-        else if (running) { setState("idle"); emit("error", { message: why }); }
+        else if (running) reconnect(why);
       };
     });
+  }
+
+  // Sessions can end on their own (e.g. Supabase's Edge Function time limit,
+  // or Gemini's session limit): reconnect quietly and carry on.
+  function reconnect(why) {
+    if (reconnects >= 3) { setState("idle"); emit("error", { message: why }); return; }
+    reconnects++;
+    finishUser(); finishSaurus(true);
+    talking = false;
+    setState("thinking");
+    setTimeout(() => {
+      if (!running) return;
+      resuming = true;
+      connect().then(() => {
+        resuming = false;
+        setTimeout(() => { reconnects = 0; }, 20000);
+        setState("idle");
+      }, (e) => { resuming = false; if (running) reconnect(e.message); });
+    }, 300 * reconnects);
   }
 
   function close() {
@@ -240,10 +274,12 @@
   function finishUser() {
     if (!inText) return;
     emit("transcript", { who: "user", text: inText.trim(), final: true });
+    remember("Learner", inText.trim());
     inText = "";
   }
   function finishSaurus(cut) {
     if (outText) emit("transcript", { who: "saurus", text: outText.trim() + (cut ? " —" : ""), final: true });
+    remember("Saurus", outText.trim());
     outText = "";
     speaking = false;
   }
@@ -362,6 +398,7 @@
       running = true;
       page = { url: String(pageUrl || ""), text: String(pageText || "") };
       talking = false; inText = ""; outText = ""; speaking = false;
+      history.length = 0; reconnects = 0;
       setState("thinking");
       try {
         await loadMemory(lang); // before connecting, so the session knows level and struggles
@@ -420,6 +457,7 @@
     sendText(text) {
       if (!live) { emit("error", { message: "Not connected to Gemini Live" }); return; }
       if (speaking) finishSaurus(true);
+      remember("Learner", String(text));
       say(String(text));
       setState("thinking");
     },
