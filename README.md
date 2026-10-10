@@ -180,6 +180,11 @@ key from Supabase's secrets: page translation over HTTPS, Gemini Live over a
 WebSocket. Set up once:
 
 1. Dashboard → **Edge Functions → Secrets**: add `GEMINI_API_KEY`.
+   Optionally add a second key as `GEMINI_TEXT_API_KEY`: page translation
+   uses it first, so it doesn't share a rate limit with voice (on a 429 the
+   other key is tried). If you set `GEMINI_MODELS`, include
+   `gemini-3.5-flash-lite`: page text tries that faster model first and falls
+   back to `gemini-3.8-flash`.
 2. Deploy the function: `supabase functions deploy gemini --no-verify-jwt`
    (CLI), or Dashboard → **Edge Functions → Deploy a new function → Via
    editor**, name it `gemini`, paste `supabase/functions/gemini/index.ts`,
