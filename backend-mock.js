@@ -353,6 +353,7 @@
         setTimeout(() => {
           resolve({ language: lang, level: levels[lang] });
           setState("idle");
+          emit("transcript", { who: "saurus", text: "Offline demo mode: no Gemini key in config.js, so my voice is a placeholder and I can't really hear you.", final: true });
           later(900, () => running && speak(SCRIPT[lang].hello));
         }, 500);
       });
