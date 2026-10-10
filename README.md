@@ -122,9 +122,9 @@ on your laptop, so every install of the extension shares the same memory.
 
 **Set up once per Supabase project:**
 
-1. Supabase Dashboard → **SQL Editor** → paste
-   `supabase/migrations/20261010160000_saurus_memory.sql` → **Run**
-   (or `supabase db push` with the Supabase CLI).
+1. Supabase Dashboard → **SQL Editor** → paste each file in
+   `supabase/migrations/`, oldest first, → **Run** (or `supabase db push`
+   with the Supabase CLI).
 2. Dashboard → **Project Settings → API**: copy the **Project URL** and the
    **anon / publishable** key into `supabase-config.js`.
 3. Commit `supabase-config.js` and push. The anon key is public by design:
@@ -145,10 +145,25 @@ on your laptop, so every install of the extension shares the same memory.
 words in its instructions, opens by bringing one back ("last time you had
 trouble with *Regeln*…"), and Saurus highlights it on the page.
 
+**Deciding what to practise next** (also in Supabase, same rules as
+`backend/src/domain.js`): each word has a mastery score, +15 for a right
+answer and −10 for a wrong one. A word is *struggling* while it has misses
+and either mastery below 70 or as many misses as right answers; it is
+*learned* at mastery ≥ 70 with more right than wrong. `saurus_next_action`
+picks the struggling word with the most net misses (recall it), or says
+"continue reading" when none are left. Gemini reports answers with its
+`log_answer` tool and gets that plan back each time, and Saurus opens every
+session with it.
+
 Database functions (all the extension can call):
-`saurus_memory(p_learner, p_language)`,
+`saurus_memory(p_learner, p_language)` (level, struggling words, next action),
 `saurus_set_level(p_learner, p_language, p_level)`,
-`saurus_log_struggle(p_learner, p_language, p_word, p_note)`.
+`saurus_log_answer(p_learner, p_language, p_word, p_correct, p_note)` (returns the next action),
+`saurus_log_struggle(p_learner, p_language, p_word, p_note)`,
+`saurus_next_action(p_learner, p_language)`.
+
+If the GitHub integration doesn't apply migrations, run each file in
+`supabase/migrations/` in order in the SQL Editor. They are safe to re-run.
 
 ## Controls
 
