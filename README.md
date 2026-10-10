@@ -154,6 +154,22 @@ words in its instructions, opens by bringing one back ("last time you had
 trouble with *Regeln*…"), and Saurus highlights it on the page. Page
 translation works those words back in where they fit.
 
+**Session handoff:** when you close Saurus or switch language, Gemini
+Flash writes a two-sentence summary of the conversation, saved with
+`saurus_save_summary` (`saurus_sessions` table). The next session in that
+language starts with it, so Saurus picks up where you left off.
+
+**Docs, Slides and web apps:** when a page has little readable text, the
+extension sends a screenshot of the tab (`captureVisibleTab`, hence the
+`<all_urls>` host permission); Gemini Flash reads it and the voice session
+talks about that. Translation in place still needs an ordinary web page.
+Chrome's PDF viewer doesn't run extensions.
+
+**Voice:** a different voice per age (Puck, Zephyr, Kore, Charon), affective
+dialog, and session resumption after a dropped connection. If Gemini refuses
+a session with these, Saurus retries without them (or set
+`liveExtras: false` in `config.js`).
+
 **Deciding what to practise next** (also in Supabase): each word has a mastery score, +15 for a right
 answer and −10 for a wrong one. A word is *struggling* while it has misses
 and either mastery below 70 or as many misses as right answers; it is

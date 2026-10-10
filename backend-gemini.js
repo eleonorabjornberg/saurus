@@ -127,6 +127,56 @@
     if (m && m.level) levels[code] = Math.max(1, Math.min(4, Number(m.level) || 1));
     struggles[code] = Array.isArray(m && m.struggles) ? m.struggles : [];
     nextAction[code] = (m && m.next) || null;
+    // Session handoff (saurus_sessions); quietly skipped if not set up.
+    lastSummary[code] = await rpc("saurus_last_summary", { p_learner: await learnerId(), p_language: code }).catch(() => null);
+  }
+  const lastSummary = { fr: null, de: null, es: null, sv: null, hi: null };
+  let summarisedAt = 0; // history entries already summarised
+
+  // A plain Gemini Flash call (text and optional image in, text out).
+  async function flash(parts) {
+    const model = textIdx;
+    const generationConfig = THINKING[thinkIdx] ? { thinkingConfig: THINKING[thinkIdx] } : {};
+    const res = await fetch(REST_URL(TEXT_MODELS[model]), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = (body.error && body.error.message) || res.statusText;
+      if (res.status === 400 && THINKING[thinkIdx] && /think/i.test(msg)) { thinkIdx++; return flash(parts); }
+      if (model < TEXT_MODELS.length - 1 && (res.status === 404 || res.status === 403)) { if (textIdx === model) textIdx++; return flash(parts); }
+      throw new Error(`Gemini ${res.status}: ${msg}`);
+    }
+    return ((body.candidates && body.candidates[0] && body.candidates[0].content && body.candidates[0].content.parts) || [])
+      .filter((p) => !p.thought).map((p) => p.text || "").join("").trim();
+  }
+
+  async function readScreen(dataUrl) {
+    const m = /^data:(image\/[a-z]+);base64,(.+)$/.exec(String(dataUrl));
+    if (!m) return "";
+    const text = await flash([
+      { text: "This is a screenshot of a browser tab. Transcribe the main readable content (the document, slide or article), up to about 400 words, as plain text. Ignore browser menus, toolbars and the small dinosaur widget. If there is no readable content, describe briefly what is shown." },
+      { inlineData: { mimeType: m[1], data: m[2] } },
+    ]);
+    return text.slice(0, 8000);
+  }
+
+  // Save a short summary of the conversation since the last one, for the
+  // next session in this language. Fire and forget.
+  function saveSummary(code) {
+    const lines = history.slice(summarisedAt);
+    summarisedAt = history.length;
+    if (!memoryOn || lines.filter((l) => l.startsWith("Learner")).length < 1 || lines.length < 2) return;
+    const convo = lines.join("\n");
+    flash([{ text: `Summarise this ${LANG[code]} tutoring conversation in at most two short sentences, in English: the topic, and what the learner did well or struggled with. No preamble.\n\n${convo}` }])
+      .then(async (summary) => {
+        if (!summary) return;
+        lastSummary[code] = summary.slice(0, 800);
+        await rpc("saurus_save_summary", { p_learner: await learnerId(), p_language: code, p_summary: summary.slice(0, 800) });
+      })
+      .catch((e) => console.warn("[saurus-gemini] summary:", e));
   }
   function saveLevel(code, lv) {
     save("saurus.levels", levels);
@@ -229,7 +279,7 @@
   function remember(who, text) {
     if (!text) return;
     history.push(`${who}: ${text}`);
-    if (history.length > 12) history.shift();
+    if (history.length > 12) { history.shift(); summarisedAt = Math.max(0, summarisedAt - 1); }
   }
 
   let resuming = false;
@@ -241,6 +291,7 @@
       "Keep each turn short: one to three sentences, usually ending with one question. Correct mistakes gently by repeating the correct form.",
       "Use your tools silently while you talk: highlight words on the page you discuss or the learner struggles with; log_struggle whenever they get a word wrong or don't know it; log_answer after every recall or drill question, then follow the plan it returns; celebrate correct answers; level_up or level_down when their level clearly changes; offer_drill when the same mistake repeats.",
       struggleNote(lang),
+      lastSummary[lang] ? `Last time in ${LANG[lang]}: ${lastSummary[lang]} Pick up from there when it fits.` : "",
       "If the learner asks to practise another language (French, German, Spanish, Swedish or Hindi), call switch_language first, then continue in that language. If they ask for easier or harder, follow them.",
       `The page (${page.url}):\n"""\n${page.text.slice(0, 8000)}\n"""`,
       resuming && history.length
@@ -256,24 +307,37 @@
     send({ clientContent: { turns: [{ role: "user", parts: [{ text }] }], turnComplete: respond } });
   }
 
-  function connect() {
+  // A voice per age: brighter when young, deeper as Saurus grows up.
+  const VOICE = { 1: "Puck", 2: "Zephyr", 3: "Kore", 4: "Charon" };
+  // Extras (voice, affective dialog, session resumption) are dropped for
+  // the rest of the visit if Gemini refuses a session that asks for them.
+  let extrasOk = cfg.liveExtras !== false;
+  let resumeHandle = null; // from sessionResumptionUpdate, to resume after a drop
+
+  function connect(opts = {}) {
     close();
+    const extras = extrasOk;
+    const resumeWith = extras && opts.resume ? resumeHandle : null;
     return new Promise((resolve, reject) => {
       const sock = new WebSocket(WS_URL);
       ws = sock;
       let ready = false;
       sock.onopen = () => {
-        sock.send(JSON.stringify({
-          setup: {
-            model: `models/${LIVE_MODEL}`,
-            generationConfig: { responseModalities: ["AUDIO"] },
-            systemInstruction: { parts: [{ text: instructions() }] },
-            tools: TOOLS,
-            realtimeInputConfig: { automaticActivityDetection: { disabled: true } }, // push-to-talk
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
-          },
-        }));
+        const setup = {
+          model: `models/${LIVE_MODEL}`,
+          generationConfig: { responseModalities: ["AUDIO"] },
+          systemInstruction: { parts: [{ text: instructions() }] },
+          tools: TOOLS,
+          realtimeInputConfig: { automaticActivityDetection: { disabled: true } }, // push-to-talk
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+        };
+        if (extras) {
+          setup.generationConfig.speechConfig = { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE[levels[lang]] || "Puck" } } };
+          setup.enableAffectiveDialog = true; // adapts to hesitation or frustration
+          setup.sessionResumption = resumeWith ? { handle: resumeWith } : {};
+        }
+        sock.send(JSON.stringify({ setup }));
       };
       sock.onmessage = async (ev) => {
         let msg;
@@ -283,12 +347,21 @@
         } catch (e) { console.warn("[saurus-gemini] bad message", e); return; }
         if (sock !== ws) return;
         if (msg.setupComplete) { ready = true; live = true; resolve(); return; }
+        const ru = msg.sessionResumptionUpdate;
+        if (ru) { if (ru.resumable !== false && ru.newHandle) resumeHandle = ru.newHandle; return; }
         handle(msg);
       };
       sock.onclose = (ev) => {
         const why = `Gemini Live closed (${ev.code}${ev.reason ? ": " + ev.reason : ""})`;
         if (sock !== ws) return;
         ws = null; live = false;
+        if (!ready && resumeWith) resumeHandle = null; // stale handle: next try starts fresh
+        else if (!ready && extras && extrasOk) {
+          extrasOk = false; // retry once without the extras
+          console.warn("[saurus-gemini] session refused with extras, retrying without:", why);
+          connect(opts).then(resolve, reject);
+          return;
+        }
         if (!ready) reject(new Error(why));
         else if (running) reconnect(why);
       };
@@ -327,7 +400,7 @@
     setTimeout(() => {
       if (!running) return;
       resuming = true;
-      connect().then(() => {
+      connect({ resume: true }).then(() => {
         resuming = false;
         setTimeout(() => { reconnects = 0; }, 20000);
         setState("idle");
@@ -419,6 +492,7 @@
   // Returns what the model should know, or null if nothing changed.
   async function switchLanguage(code, fromModel) {
     if (!LANG[code] || code === lang) return null;
+    saveSummary(lang);
     lang = code;
     recall = null;
     save("saurus.language", code);
@@ -588,11 +662,14 @@
   // The interface
   // ---------------------------------------------------------------------
   window.SaurusBackend = {
-    async start({ pageUrl, pageText } = {}) {
+    async start({ pageUrl, pageText, snapshot } = {}) {
       running = true;
       page = { url: String(pageUrl || ""), text: String(pageText || "") };
+      // Docs, Slides and web apps have little readable text in the page:
+      // read a screenshot of the tab instead (taken by the extension).
+      const seeing = snapshot ? readScreen(snapshot).then((t) => { if (t) page.text = t; }, (e) => console.warn("[saurus-gemini] snapshot:", e)) : null;
       talking = false; inText = ""; outText = ""; speaking = false;
-      history.length = 0; reconnects = 0;
+      history.length = 0; reconnects = 0; summarisedAt = 0; resumeHandle = null;
       setState("thinking");
       await prefsReady;
       try {
@@ -600,6 +677,7 @@
       } catch (e) {
         memoryProblem(e);
       }
+      if (seeing) await seeing;
       try {
         await connect();
       } catch (e) {
@@ -671,6 +749,7 @@
     },
 
     stop() {
+      if (running) saveSummary(lang);
       running = false;
       recall = null;
       close();

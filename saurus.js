@@ -597,6 +597,18 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // In the extension, record through the offscreen page (background.js) so
   // Chrome asks for the microphone once for all sites, not once per site.
   let micPort = null, micReady = false, micWait = null;
+  function snapshotTab() {
+    return new Promise((resolve) => {
+      const t = setTimeout(() => resolve(null), 2000);
+      try {
+        chrome.runtime.sendMessage({ target: "background", type: "snapshot" }, (r) => {
+          void chrome.runtime.lastError;
+          clearTimeout(t);
+          resolve(r && r.dataUrl ? r.dataUrl : null);
+        });
+      } catch (_) { clearTimeout(t); resolve(null); }
+    });
+  }
   function inExtension() {
     try { return !!(typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id && chrome.runtime.connect); } catch (_) { return false; }
   }
@@ -728,7 +740,8 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   function warmArt(l, lv) {
     for (const sfx of ["", "-blink", "-talk"]) pngExists(assetUrl(`assets/saurus-${l}-${lv}${sfx}.png`));
   }
-  if (look) warmArt(look.lang, look.level);
+  const START_LANG = LANG_NAME[(window.SAURUS_CONFIG || {}).language] ? window.SAURUS_CONFIG.language : "de";
+  warmArt(look ? look.lang : START_LANG, look ? look.level : 1);
 
   let artToken = 0;
   function renderArt() {
@@ -1214,7 +1227,9 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     live.s = live.u = null;
     lang = null;
     level = 1;
-    shownLang = look ? look.lang : null;
+    // Last pet shown, else the default language's hatchling (never the
+    // drawn placeholder while a picture exists).
+    shownLang = look ? look.lang : START_LANG;
     shownLevel = look ? look.level : 1;
     setAvatarState("idle");
     setMuted(muted);
@@ -1234,7 +1249,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
 
     collectBlocks();
     const pageText = blocks.map((b) => b.text).join("\n").slice(0, 20000);
-    callAsync("start", { pageUrl: location.href, pageText })
+    // Little readable text (Docs, Slides, web apps): send a screenshot of
+    // the tab instead, so Saurus still knows what you're looking at.
+    const snap = inExtension() && pageText.length < 500 ? snapshotTab() : Promise.resolve(null);
+    snap.then((snapshot) => callAsync("start", { pageUrl: location.href, pageText, snapshot }))
       .then((info) => {
         if (my !== session) return;
         lang = (info && info.language) || "fr";
