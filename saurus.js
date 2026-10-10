@@ -29,12 +29,16 @@
 
   // Where to load assets/ from: the extension package, or next to this script.
   const SCRIPT_SRC = document.currentScript && document.currentScript.src;
+  // Read once at start: after the extension is reloaded, a tab that stays
+  // open loses chrome.runtime, but the same chrome-extension:// URLs still work.
+  let EXT_BASE = "";
+  try {
+    if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id && chrome.runtime.getURL) {
+      EXT_BASE = chrome.runtime.getURL("");
+    }
+  } catch (_) { /* not an extension */ }
   function assetUrl(path) {
-    try {
-      if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id && chrome.runtime.getURL) {
-        return chrome.runtime.getURL(path);
-      }
-    } catch (_) { /* not an extension */ }
+    if (EXT_BASE) return EXT_BASE + path;
     return SCRIPT_SRC ? new URL(path, SCRIPT_SRC).href : path;
   }
 
@@ -270,6 +274,23 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   let muted = false;
   let lang = null, level = 1;           // what the backend says
   let shownLang = null, shownLevel = 1; // what the avatar shows
+  // The last language and age shown, so a new tab opens with the right pet
+  // instead of a placeholder (chrome.storage in the extension: all sites).
+  const LOOK_KEY = "saurusLook";
+  let look = null;
+  try { const v = JSON.parse(localStorage.getItem(LOOK_KEY)); if (v && LANG_NAME[v.lang]) look = v; } catch (_) {}
+  try {
+    if (EXT_BASE) chrome.storage.local.get(LOOK_KEY, (r) => {
+      const v = r && r[LOOK_KEY];
+      if (v && LANG_NAME[v.lang]) { look = v; warmArt(v.lang, v.level); }
+    });
+  } catch (_) {}
+  function rememberLook(l, lv) {
+    if (look && look.lang === l && look.level === lv) return;
+    look = { lang: l, level: lv };
+    try { localStorage.setItem(LOOK_KEY, JSON.stringify(look)); } catch (_) {}
+    try { if (EXT_BASE) chrome.storage.local.set({ [LOOK_KEY]: look }, () => void chrome.runtime.lastError); } catch (_) {}
+  }
   let avatarState = "idle";
   let blocks = [];                      // [{id, el, text, tr, orig}]
   let byId = new Map();
@@ -289,6 +310,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     }
     try { return be[name](...args); } catch (err) { problem(`Backend error in ${name}(): ${errText(err)}`); return undefined; }
   }
+  function setLang(code) {
+    callAsync("setLanguage", code).catch((err) => problem(`I couldn't switch language: ${errText(err)}.`));
+  }
+
   function callAsync(name, ...args) {
     const be = backend();
     if (!be || typeof be[name] !== "function") {
@@ -381,6 +406,19 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // ---------------------------------------------------------------------
   // Bubbles
   // ---------------------------------------------------------------------
+  // Gemini sometimes writes *emphasis* or **bold**: show it as bold, built
+  // from DOM nodes (no innerHTML), instead of printing the asterisks.
+  function fillText(el, text) {
+    el.textContent = "";
+    const parts = String(text).split(/(\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*)/);
+    for (const part of parts) {
+      if (!part) continue;
+      const m = part.match(/^\*\*?([^*]+?)\*?\*$/);
+      if (m) { const b = document.createElement("b"); b.textContent = m[1]; el.appendChild(b); }
+      else el.appendChild(document.createTextNode(part));
+    }
+  }
+
   function addBubble(who, text, opts = {}) {
     const el = document.createElement("div");
     el.className = `bubble glass ${who}` + (opts.error ? " err" : "");
@@ -388,7 +426,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     label.textContent = opts.label || (who === "s" ? (opts.error ? "Saurus · problem" : "Saurus") : "You, live transcript");
     const t = document.createElement("span");
     t.className = "text" + (opts.live ? " caret" : "");
-    t.textContent = text;
+    fillText(t, text);
     el.append(label, t);
     el.addEventListener("click", (e) => {
       if (e.target.closest("button")) return;
@@ -402,7 +440,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   }
 
   function setBubbleText(el, text) {
-    el.querySelector(".text").textContent = text;
+    fillText(el.querySelector(".text"), text);
     fit();
   }
 
@@ -599,6 +637,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     if (inExtension()) {
       try { return extMicStart(); } catch (e) { return Promise.reject(new Error("Saurus was updated: refresh this page")); }
     }
+    if (EXT_BASE) return Promise.reject(new Error("Saurus was updated: refresh this page")); // extension reloaded under this tab
     if (micStream) return Promise.resolve();
     if (micPromise) return micPromise;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -686,20 +725,28 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     return pngCache.get(url);
   }
 
+  function warmArt(l, lv) {
+    for (const sfx of ["", "-blink", "-talk"]) pngExists(assetUrl(`assets/saurus-${l}-${lv}${sfx}.png`));
+  }
+  if (look) warmArt(look.lang, look.level);
+
   let artToken = 0;
   function renderArt() {
     if (!ui) return;
     const l = shownLang, lv = shownLevel, my = ++artToken;
     ui.wrap.style.setProperty("--size", LEVEL_SIZE[lv] + "px");
-    setHTML(ui.art, avatarSVG(l, lv));
     const who = l ? `${LANG_NAME[l]} · ${LEVEL_NAME[lv]}` : "Waking up…";
     ui.wrap.title = who;
     ui.wrap.setAttribute("aria-label", `Saurus, ${who}`);
-    if (!l) return;
+    if (!l) { setHTML(ui.art, avatarSVG(l, lv)); return; }
+    rememberLook(l, lv);
     // Optional frames next to the base art: -blink (eyes closed), -talk (mouth open).
     const url = (suffix) => assetUrl(`assets/saurus-${l}-${lv}${suffix}.png`);
+    // Keep the current picture until the new one is ready; the drawn
+    // fallback only shows if there is no picture for this language and age.
     Promise.all(["", "-blink", "-talk"].map((sfx) => pngExists(url(sfx)))).then(([base, blink, talk]) => {
-      if (!base || my !== artToken) return;
+      if (my !== artToken) return;
+      if (!base) { setHTML(ui.art, avatarSVG(l, lv)); return; }
       const frame = (sfx, cls) => {
         const img = document.createElement("img");
         img.src = url(sfx);
@@ -954,6 +1001,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   }
 
   let retranslateTimer = 0;
+  let langPending = false, langTimer = 0;
   function retranslateSoon() {
     clearTimeout(retranslateTimer);
     retranslateTimer = setTimeout(translateAll, 60);
@@ -1129,7 +1177,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       if (!d) return;
       const lv = Math.max(1, Math.min(4, Number(d.level) || 1));
       if (d.language && lang && d.language !== lang) return;
-      if (lv === level) return;
+      const waiting = langPending;
+      langPending = false;
+      clearTimeout(langTimer);
+      if (lv === level) { if (waiting && translated) retranslateSoon(); return; }
       level = lv;
       shownLevel = lv;
       renderArt();
@@ -1140,7 +1191,11 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       if (!code || code === lang) return;
       lang = code;
       puffSwap(() => { shownLang = code; shownLevel = level; renderArt(); });
-      if (translated) retranslateSoon();
+      // The new language's level follows in a "level" event: translate once,
+      // then (or after a moment if it never comes).
+      langPending = true;
+      clearTimeout(langTimer);
+      langTimer = setTimeout(() => { if (langPending) { langPending = false; if (translated) retranslateSoon(); } }, 2500);
     });
     on("drill_offer", (d) => drillOffer(d && d.topic));
     on("celebrate", celebrate);
@@ -1157,8 +1212,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     ui.root.hidden = false;
     ui.log.replaceChildren();
     live.s = live.u = null;
-    lang = shownLang = null;
-    level = shownLevel = 1;
+    lang = null;
+    level = 1;
+    shownLang = look ? look.lang : null;
+    shownLevel = look ? look.level : 1;
     setAvatarState("idle");
     setMuted(muted);
     renderArt();
@@ -1182,7 +1239,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
         if (my !== session) return;
         lang = (info && info.language) || "fr";
         level = Math.max(1, Math.min(4, Number(info && info.level) || 1));
-        puffSwap(() => { shownLang = lang; shownLevel = level; renderArt(); });
+        if (lang !== shownLang || level !== shownLevel) puffSwap(() => { shownLang = lang; shownLevel = level; renderArt(); });
         translateAll();
       })
       .catch((err) => {
@@ -1234,6 +1291,9 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   }
 
   window.addEventListener("keydown", (e) => {
+    // In the extension only real key presses count, so a website can't start
+    // Saurus or change its saved language (demo.html's buttons send fake ones).
+    if (EXT_BASE && !e.isTrusted) return;
     if (e.altKey && !e.ctrlKey && !e.metaKey) {
       if (e.code === "KeyS") {
         e.preventDefault();
@@ -1246,11 +1306,11 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
         ArrowUp: () => demo("levelUp"),
         ArrowDown: () => demo("levelDown"),
         KeyD: () => demo("drillOffer"),
-        Digit1: () => call("setLanguage", "fr"),
-        Digit2: () => call("setLanguage", "de"),
-        Digit3: () => call("setLanguage", "es"),
-        Digit4: () => call("setLanguage", "sv"),
-        Digit5: () => call("setLanguage", "hi"),
+        Digit1: () => setLang("fr"),
+        Digit2: () => setLang("de"),
+        Digit3: () => setLang("es"),
+        Digit4: () => setLang("sv"),
+        Digit5: () => setLang("hi"),
       }[e.code];
       if (action) {
         e.preventDefault();

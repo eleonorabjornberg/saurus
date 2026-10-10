@@ -35,9 +35,13 @@ function toBase64(int16) {
   return btoa(bin);
 }
 
-let stream = null, ctx = null, proc = null, sending = false, ds = null;
+let stream = null, ctx = null, proc = null, sending = false, ds = null, opening = null;
 
-async function open() {
+function open() { // one microphone even if two tabs start at once
+  if (!opening) opening = openMic().catch((e) => { opening = null; throw e; });
+  return opening;
+}
+async function openMic() {
   if (stream) return;
   stream = await navigator.mediaDevices.getUserMedia({
     audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
@@ -60,7 +64,7 @@ function release() {
   if (proc) proc.onaudioprocess = null;
   if (stream) stream.getTracks().forEach((t) => t.stop());
   if (ctx) ctx.close().catch(() => {});
-  stream = ctx = proc = ds = null;
+  stream = ctx = proc = ds = opening = null;
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
