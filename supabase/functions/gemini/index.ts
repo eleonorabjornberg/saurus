@@ -6,9 +6,12 @@
 //                                                         (Gemini Live voice)
 //
 // Secrets (Dashboard > Edge Functions > Secrets):
-//   GEMINI_API_KEY   required
+//   GEMINI_API_KEY   required; used for voice
+//   GEMINI_TEXT_API_KEY  optional second key, used first for page translation
+//                    so it doesn't share a rate limit with voice; on a 429
+//                    the other key is tried
 //   GEMINI_MODELS    optional, comma-separated allow-list
-//                    (default "gemini-3.8-live,gemini-3.8-flash")
+//                    (default "gemini-3.8-live,gemini-3.8-flash,gemini-3.5-flash-lite")
 //   ALLOWED_ORIGINS  optional, comma-separated; empty allows any origin
 //
 // JWT verification must be off for this function: browsers cannot send an
@@ -16,7 +19,9 @@
 
 const UPSTREAM = (Deno.env.get("GEMINI_UPSTREAM") ?? "https://generativelanguage.googleapis.com").replace(/\/$/, "");
 const KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
-const MODELS = (Deno.env.get("GEMINI_MODELS") ?? "gemini-3.8-live,gemini-3.8-flash")
+const TEXT_KEYS = [Deno.env.get("GEMINI_TEXT_API_KEY") ?? "", KEY].filter(Boolean)
+  .filter((k, i, a) => a.indexOf(k) === i);
+const MODELS = (Deno.env.get("GEMINI_MODELS") ?? "gemini-3.8-live,gemini-3.8-flash,gemini-3.5-flash-lite")
   .split(",").map((m) => m.trim()).filter(Boolean);
 const ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ?? "").split(",").map((o) => o.trim()).filter(Boolean);
 const LIVE_PATH = "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
@@ -84,11 +89,16 @@ Deno.serve(async (req) => {
   const m = path.match(/^\/v1beta\/models\/([^/:]+):generateContent$/);
   if (m && req.method === "POST") {
     if (!allowedModel(m[1])) return json(403, { error: { message: `model not allowed: ${m[1]}` } }, origin);
-    const res = await fetch(`${UPSTREAM}${path}?key=${encodeURIComponent(KEY)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: await req.text(),
-    });
+    const body = await req.text();
+    let res!: Response;
+    for (const key of TEXT_KEYS) {
+      res = await fetch(`${UPSTREAM}${path}?key=${encodeURIComponent(key)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (res.status !== 429) break; // rate-limited: try the next key
+    }
     return new Response(res.body, { status: res.status, headers: { ...cors(origin), "Content-Type": "application/json" } });
   }
 

@@ -21,7 +21,11 @@
 
   const KEY = encodeURIComponent(cfg.geminiApiKey || "");
   const LIVE_MODEL = cfg.liveModel || "gemini-3.8-live";
-  const TEXT_MODEL = cfg.textModel || "gemini-3.8-flash";
+  // Page translation tries the faster Flash-Lite first and falls back to
+  // Flash if it isn't available (or the Supabase function doesn't allow it).
+  // Set fastTextModel: "" in config.js to always use textModel.
+  const TEXT_MODELS = [cfg.fastTextModel ?? "gemini-3.5-flash-lite", cfg.textModel || "gemini-3.8-flash"].filter(Boolean);
+  let textIdx = 0;
   const API = (viaSupabase ? String(sbCfg.url).replace(/\/$/, "") + "/functions/v1/gemini"
     : (cfg.apiBase || "https://generativelanguage.googleapis.com")).replace(/\/$/, "");
   const WS_URL = API.replace(/^http/, "ws") +
@@ -438,15 +442,74 @@
   // setting the model accepts, falling back if it rejects the field.
   const THINKING = [{ thinkingLevel: "minimal" }, { thinkingBudget: 0 }, null];
   let thinkIdx = 0;
-  // Finished translations, so revisiting a level or language is instant.
+  // Finished translations, so revisiting a level, a language or a page is
+  // instant. Kept across visits: in chrome.storage.local for the extension
+  // (shared by all sites), in localStorage on the demo page.
+  const CACHE_MAX = 4000;
   const cache = new Map();
-  const cacheKey = (language, level, text) => `v3|${language}|${level}|${text}`;
+  const hash = (str) => { // cyrb53: short keys instead of whole paragraphs
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36);
+  };
+  const cacheKey = (language, level, text) => `${language}${level}${hash(text)}`;
+  const CACHE_STORE = "saurusTranslations.v3";
+  const useChromeStore = typeof chrome !== "undefined" && chrome.storage && chrome.storage.local;
+  function cacheSet(k, v) {
+    cache.delete(k);
+    cache.set(k, v);
+    while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value);
+  }
+  const cacheReady = new Promise((resolve) => {
+    const fill = (obj) => {
+      const saved = cache.size ? [...cache] : [];
+      cache.clear();
+      if (obj && typeof obj === "object") for (const k of Object.keys(obj)) if (typeof obj[k] === "string") cacheSet(k, obj[k]);
+      for (const [k, v] of saved) cacheSet(k, v); // newer than what was stored
+      resolve();
+    };
+    try {
+      if (useChromeStore) chrome.storage.local.get(CACHE_STORE, (r) => fill(r && r[CACHE_STORE]));
+      else fill(load(CACHE_STORE, null));
+    } catch (_) { resolve(); }
+    setTimeout(resolve, 1500); // never hold translation up for long
+  });
+  let saveTimer = 0;
+  function persistCache() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const obj = Object.fromEntries(cache);
+      try {
+        if (useChromeStore) chrome.storage.local.set({ [CACHE_STORE]: obj }, () => void chrome.runtime.lastError);
+        else {
+          try { localStorage.setItem(CACHE_STORE, JSON.stringify(obj)); }
+          catch (_) { // storage full: keep the newer half
+            const keys = [...cache.keys()];
+            for (const k of keys.slice(0, keys.length >> 1)) cache.delete(k);
+            save(CACHE_STORE, Object.fromEntries(cache));
+          }
+        }
+      } catch (_) {}
+    }, 1000);
+  }
+
+  function noteMarks(html) {
+    for (const m of html.matchAll(/<mark>([^<]+)<\/mark>/gi)) {
+      for (const w of m[1].split(/[^\p{L}\p{M}'’-]+/u)) if (w) marked.add(w.toLowerCase());
+    }
+  }
 
   async function translateBatch(blocks, language, level) {
+    await cacheReady;
     const out = [], todo = [];
     for (const b of blocks) {
       const hit = cache.get(cacheKey(language, level, b.text));
-      if (hit !== undefined) out.push({ id: b.id, html: hit }); else todo.push(b);
+      if (hit !== undefined) { out.push({ id: b.id, html: hit }); noteMarks(hit); } else todo.push(b);
     }
     if (!todo.length) return out;
     const prompt = [
@@ -465,7 +528,8 @@
     };
     const mode = thinkIdx;
     if (THINKING[mode]) generationConfig.thinkingConfig = THINKING[mode];
-    const res = await fetch(REST_URL(TEXT_MODEL), {
+    const model = textIdx;
+    const res = await fetch(REST_URL(TEXT_MODELS[model]), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
@@ -477,6 +541,11 @@
         if (thinkIdx === mode) thinkIdx = mode + 1;
         return out.concat(await translateBatch(todo, language, level));
       }
+      if (model < TEXT_MODELS.length - 1 && (res.status === 404 || res.status === 403 ||
+          (res.status === 400 && /model/i.test(msg)))) { // fast model unavailable: use the next one
+        if (textIdx === model) textIdx = model + 1;
+        return out.concat(await translateBatch(todo, language, level));
+      }
       throw new Error(`Gemini ${res.status}: ${msg}`);
     }
     const text = ((body.candidates && body.candidates[0] && body.candidates[0].content && body.candidates[0].content.parts) || [])
@@ -486,14 +555,10 @@
     const textOf = new Map(todo.map((b) => [b.id, b.text]));
     for (const item of got) {
       if (!item || typeof item.html !== "string") continue;
-      if (textOf.has(item.id)) {
-        if (cache.size > 3000) cache.delete(cache.keys().next().value);
-        cache.set(cacheKey(language, level, textOf.get(item.id)), item.html);
-      }
-      for (const m of item.html.matchAll(/<mark>([^<]+)<\/mark>/gi)) {
-        for (const w of m[1].split(/[^\p{L}\p{M}'’-]+/u)) if (w) marked.add(w.toLowerCase());
-      }
+      if (textOf.has(item.id)) cacheSet(cacheKey(language, level, textOf.get(item.id)), item.html);
+      noteMarks(item.html);
     }
+    persistCache();
     return out.concat(got);
   }
 
