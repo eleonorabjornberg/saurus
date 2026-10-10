@@ -120,10 +120,10 @@ must exist by the time the user presses Alt+S.
 To push it (from the repo folder):
 
 ```sh
-git pull origin claude/loving-dijkstra-fjqpo9
+git pull origin main
 git add backend.js            # plus vendor/ or anything else you added
 git commit -m "Add real Supabase backend"
-git push origin claude/loving-dijkstra-fjqpo9
+git push origin main
 ```
 
 ### Methods
