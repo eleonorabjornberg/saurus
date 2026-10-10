@@ -189,6 +189,8 @@
         parameters: { type: "OBJECT", properties: { word: { type: "STRING", description: "The target-language word or short phrase" }, note: { type: "STRING", description: "What went wrong, in a few words" } }, required: ["word"] } },
       { name: "log_answer", description: "After you check whether the learner knows a word (a recall question, a drill question), report whether they got it right. The result tells you what to practise next: follow it.",
         parameters: { type: "OBJECT", properties: { word: { type: "STRING", description: "The target-language word you checked" }, correct: { type: "BOOLEAN", description: "Did they get it right?" }, note: { type: "STRING", description: "What went wrong, if anything" } }, required: ["word", "correct"] } },
+      { name: "switch_language", description: "Switch the language the learner is practising when they ask for another one (e.g. 'can we do Spanish?'). This also changes Saurus's costume and re-translates the page. Then speak only the new language.",
+        parameters: { type: "OBJECT", properties: { language: { type: "STRING", enum: ["fr", "de", "es", "sv", "hi"], description: "fr French, de German, es Spanish, sv Swedish, hi Hindi" } }, required: ["language"] } },
       { name: "offer_drill", description: "Offer a short five-minute drill when the learner keeps making the same kind of mistake.",
         parameters: { type: "OBJECT", properties: { topic: { type: "STRING", description: "What the drill practices, in a few words" } }, required: ["topic"] } },
     ],
@@ -216,7 +218,7 @@
       "Keep each turn short: one to three sentences, usually ending with one question. Correct mistakes gently by repeating the correct form.",
       "Use your tools silently while you talk: highlight words on the page you discuss or the learner struggles with; log_struggle whenever they get a word wrong or don't know it; log_answer after every recall or drill question, then follow the plan it returns; celebrate correct answers; level_up or level_down when their level clearly changes; offer_drill when the same mistake repeats.",
       struggleNote(lang),
-      "If the learner switches language or asks for easier/harder, follow them.",
+      "If the learner asks to practise another language (French, German, Spanish, Swedish or Hindi), call switch_language first, then continue in that language. If they ask for easier or harder, follow them.",
       `The page (${page.url}):\n"""\n${page.text.slice(0, 8000)}\n"""`,
       resuming && history.length
         ? `The connection just dropped and came back. Conversation so far (continue it; do not greet again):\n${history.join("\n")}`
@@ -353,10 +355,37 @@
       case "level_down": return changeLevel(-1);
       case "log_struggle": return logAnswer(args.word, false, args.note);
       case "log_answer": return logAnswer(args.word, !!args.correct, args.note);
+      case "switch_language": {
+        const raw = String(args.language || "").toLowerCase();
+        const code = LANG[raw] ? raw : CODE_OF[raw];
+        if (!code) return "unknown language; choose fr, de, es, sv or hi";
+        if (code === lang) return `already practising ${LANG[code]}`;
+        const info = await switchLanguage(code, true);
+        return info ? `switched to ${LANG[code]}. ${info} From now on speak ${LANG[code]} at that level.` : "not switched";
+      }
       case "offer_drill": emit("drill_offer", { topic: String(args.topic || "this page") }); return "offered; wait for the learner's answer";
       default: return "unknown tool";
     }
   }
+
+  // Switch the target language: costume puff, page re-translation (via the
+  // "language"/"level" events), and that language's own level and memory.
+  // Returns what the model should know, or null if nothing changed.
+  async function switchLanguage(code, fromModel) {
+    if (!LANG[code] || code === lang) return null;
+    lang = code;
+    recall = null;
+    save("saurus.language", code);
+    emit("language", { code });
+    if (!fromModel && speaking) finishSaurus(true);
+    if (!fromModel) setState("thinking");
+    try { await loadMemory(code); } catch (e) { memoryProblem(e); }
+    if (lang !== code) return null; // switched again meanwhile
+    emit("level", { language: code, level: levels[code] });
+    const note = struggleNote(code);
+    return `My ${LANG[code]} level is ${levels[code]} of 4: ${LEVEL[levels[code]]}.${note ? " " + note : ""}`;
+  }
+  const CODE_OF = { french: "fr", german: "de", spanish: "es", swedish: "sv", hindi: "hi" };
 
   function changeLevel(delta) {
     const next = Math.max(1, Math.min(4, levels[lang] + delta));
@@ -495,18 +524,8 @@
     },
 
     async setLanguage(code) {
-      if (!LANG[code] || code === lang) return;
-      lang = code;
-      recall = null;
-      save("saurus.language", code);
-      emit("language", { code });
-      if (speaking) finishSaurus(true);
-      setState("thinking");
-      try { await loadMemory(code); } catch (e) { memoryProblem(e); }
-      if (lang !== code) return; // switched again meanwhile
-      emit("level", { language: code, level: levels[code] });
-      const note = struggleNote(code);
-      say(`(Switch now: from here on speak ${LANG[code]} with me. My ${LANG[code]} level is ${levels[code]} of 4: ${LEVEL[levels[code]]}.${note ? " " + note : ""} Greet me in ${LANG[code]} and continue our conversation about the page.)`);
+      const info = await switchLanguage(code, false);
+      if (info) say(`(Switch now: from here on speak ${LANG[code]} with me. ${info} Greet me in ${LANG[code]} and continue our conversation about the page.)`);
     },
 
     stop() {
