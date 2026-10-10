@@ -6,25 +6,29 @@
  * celebrate). Page translation: Gemini Flash with structured JSON output.
  *
  * Active when config.js sets geminiApiKey (direct to Google) or apiBase (a
- * proxy, e.g. a Supabase Edge Function that adds the key server-side), and
- * no other backend (backend.js) has set window.SaurusBackend first.
- * Levels and language are remembered in localStorage.
+ * proxy), or supabase-config.js turns on the "gemini" Supabase Edge Function
+ * (key kept in Supabase), and no other backend (backend.js) has set
+ * window.SaurusBackend first.
  */
 (function () {
   "use strict";
   if (window.SaurusBackend) return;
   const cfg = window.SAURUS_CONFIG || {};
-  if (!cfg.geminiApiKey && !cfg.apiBase) return; // no key and no proxy: the mock runs
+  const sbCfg = window.SAURUS_SUPABASE || {};
+  // A local key wins; otherwise the Supabase Edge Function, if switched on.
+  const viaSupabase = !cfg.geminiApiKey && !cfg.apiBase && sbCfg.gemini && sbCfg.url;
+  if (!cfg.geminiApiKey && !cfg.apiBase && !viaSupabase) return; // nothing configured: the mock runs
 
   const KEY = encodeURIComponent(cfg.geminiApiKey || "");
   const LIVE_MODEL = cfg.liveModel || "gemini-3.8-live";
   const TEXT_MODEL = cfg.textModel || "gemini-3.8-flash";
-  const API = (cfg.apiBase || "https://generativelanguage.googleapis.com").replace(/\/$/, "");
+  const API = (viaSupabase ? String(sbCfg.url).replace(/\/$/, "") + "/functions/v1/gemini"
+    : (cfg.apiBase || "https://generativelanguage.googleapis.com")).replace(/\/$/, "");
   const WS_URL = API.replace(/^http/, "ws") +
     "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + KEY;
   const REST_URL = (model) => `${API}/v1beta/models/${model}:generateContent?key=${KEY}`;
 
-  const LANG = { fr: "French", de: "German", es: "Spanish", sv: "Swedish" };
+  const LANG = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi" };
   const LEVEL = {
     1: "total beginner (hatchling): mostly English with a few key words in the target language",
     2: "beginner (juvenile): short, very simple sentences",
@@ -39,11 +43,11 @@
     try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch (_) { return fallback; }
   }
   function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (_) {} }
-  const levels = Object.assign({ fr: 1, de: 1, es: 1, sv: 1 }, load("saurus.levels", {}));
+  const levels = Object.assign({ fr: 1, de: 1, es: 1, sv: 1, hi: 1 }, load("saurus.levels", {}));
   let lang = LANG[load("saurus.language", "")] ? load("saurus.language", "fr") : (LANG[cfg.language] ? cfg.language : "de");
-  const struggles = { fr: [], de: [], es: [], sv: [] }; // [{word, note, misses}], most missed first
+  const struggles = { fr: [], de: [], es: [], sv: [], hi: [] }; // [{word, note, misses}], most missed first
   const marked = new Set(); // target-language words the last translations marked on the page
-  const nextAction = { fr: null, de: null, es: null, sv: null }; // from saurus_next_action
+  const nextAction = { fr: null, de: null, es: null, sv: null, hi: null }; // from saurus_next_action
 
   // Supabase (hosted, see supabase-config.js): level per language and
   // struggle words, through three database functions (supabase/migrations).
@@ -51,7 +55,31 @@
   const sb = window.SAURUS_SUPABASE || {};
   const SB_URL = String(sb.url || cfg.supabaseUrl || "").replace(/\/$/, "");
   const SB_KEY = String(sb.anonKey || cfg.supabaseAnonKey || "");
-  const LEARNER = String(sb.learner || cfg.learner || "demo").slice(0, 64);
+  // Whose memory: a fixed name (e.g. "demo") shared by everyone using it, or
+  // "auto" (default): a random id per install, so each user has their own.
+  const FIXED_LEARNER = String(sb.learner || cfg.learner || "auto").slice(0, 64);
+  let learnerP = null;
+  function learnerId() {
+    if (FIXED_LEARNER && FIXED_LEARNER !== "auto") return Promise.resolve(FIXED_LEARNER);
+    if (!learnerP) learnerP = new Promise((resolve) => {
+      const make = () => "u-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+      try {
+        // extension: one id for every site; the page's localStorage is per site
+        if (typeof chrome !== "undefined" && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get("saurusLearner", (r) => {
+            let id = r && r.saurusLearner;
+            if (!id) { id = make(); chrome.storage.local.set({ saurusLearner: id }); }
+            resolve(id);
+          });
+          return;
+        }
+      } catch (_) { /* not an extension */ }
+      let id = load("saurus.learner", null);
+      if (!id) { id = make(); save("saurus.learner", id); }
+      resolve(id);
+    });
+    return learnerP;
+  }
   const memoryOn = !!(SB_URL && SB_KEY);
 
   async function rpc(fn, args) {
@@ -72,14 +100,14 @@
   }
   async function loadMemory(code) {
     if (!memoryOn) return;
-    const m = await rpc("saurus_memory", { p_learner: LEARNER, p_language: code });
+    const m = await rpc("saurus_memory", { p_learner: await learnerId(), p_language: code });
     if (m && m.level) levels[code] = Math.max(1, Math.min(4, Number(m.level) || 1));
     struggles[code] = Array.isArray(m && m.struggles) ? m.struggles : [];
     nextAction[code] = (m && m.next) || null;
   }
   function saveLevel(code, lv) {
     save("saurus.levels", levels);
-    if (memoryOn) rpc("saurus_set_level", { p_learner: LEARNER, p_language: code, p_level: lv }).catch(memoryProblem);
+    if (memoryOn) learnerId().then((id) => rpc("saurus_set_level", { p_learner: id, p_language: code, p_level: lv })).catch(memoryProblem);
   }
   // Record a right or wrong answer about a word. Supabase replies with what
   // to practise next (saurus_next_action), which goes back to Gemini.
@@ -93,7 +121,7 @@
     if (!memoryOn) return "noted";
     try {
       const next = await rpc("saurus_log_answer", {
-        p_learner: LEARNER, p_language: lang, p_word: w, p_correct: !!correct,
+        p_learner: await learnerId(), p_language: lang, p_word: w, p_correct: !!correct,
         p_note: note ? String(note).slice(0, 200) : null,
       });
       nextAction[lang] = next;
@@ -161,6 +189,8 @@
         parameters: { type: "OBJECT", properties: { word: { type: "STRING", description: "The target-language word or short phrase" }, note: { type: "STRING", description: "What went wrong, in a few words" } }, required: ["word"] } },
       { name: "log_answer", description: "After you check whether the learner knows a word (a recall question, a drill question), report whether they got it right. The result tells you what to practise next: follow it.",
         parameters: { type: "OBJECT", properties: { word: { type: "STRING", description: "The target-language word you checked" }, correct: { type: "BOOLEAN", description: "Did they get it right?" }, note: { type: "STRING", description: "What went wrong, if anything" } }, required: ["word", "correct"] } },
+      { name: "switch_language", description: "Switch the language the learner is practising when they ask for another one (e.g. 'can we do Spanish?'). This also changes Saurus's costume and re-translates the page. Then speak only the new language.",
+        parameters: { type: "OBJECT", properties: { language: { type: "STRING", enum: ["fr", "de", "es", "sv", "hi"], description: "fr French, de German, es Spanish, sv Swedish, hi Hindi" } }, required: ["language"] } },
       { name: "offer_drill", description: "Offer a short five-minute drill when the learner keeps making the same kind of mistake.",
         parameters: { type: "OBJECT", properties: { topic: { type: "STRING", description: "What the drill practices, in a few words" } }, required: ["topic"] } },
     ],
@@ -171,7 +201,15 @@
   let recall = null; // {word, until}: a remembered word to highlight once the page is translated
   let ws = null, live = false, running = false;
   let talking = false, inText = "", outText = "", speaking = false;
+  const history = []; // last exchanges, to carry the conversation over a reconnect
+  let reconnects = 0;
+  function remember(who, text) {
+    if (!text) return;
+    history.push(`${who}: ${text}`);
+    if (history.length > 12) history.shift();
+  }
 
+  let resuming = false;
   function instructions() {
     return [
       `You are Saurus, a small, warm, patient dinosaur who tutors languages. The learner is learning ${LANG[lang]}.`,
@@ -180,8 +218,11 @@
       "Keep each turn short: one to three sentences, usually ending with one question. Correct mistakes gently by repeating the correct form.",
       "Use your tools silently while you talk: highlight words on the page you discuss or the learner struggles with; log_struggle whenever they get a word wrong or don't know it; log_answer after every recall or drill question, then follow the plan it returns; celebrate correct answers; level_up or level_down when their level clearly changes; offer_drill when the same mistake repeats.",
       struggleNote(lang),
-      "If the learner switches language or asks for easier/harder, follow them.",
+      "If the learner asks to practise another language (French, German, Spanish, Swedish or Hindi), call switch_language first, then continue in that language. If they ask for easier or harder, follow them.",
       `The page (${page.url}):\n"""\n${page.text.slice(0, 8000)}\n"""`,
+      resuming && history.length
+        ? `The connection just dropped and came back. Conversation so far (continue it; do not greet again):\n${history.join("\n")}`
+        : "",
     ].join("\n");
   }
 
@@ -226,9 +267,28 @@
         if (sock !== ws) return;
         ws = null; live = false;
         if (!ready) reject(new Error(why));
-        else if (running) { setState("idle"); emit("error", { message: why }); }
+        else if (running) reconnect(why);
       };
     });
+  }
+
+  // Sessions can end on their own (e.g. Supabase's Edge Function time limit,
+  // or Gemini's session limit): reconnect quietly and carry on.
+  function reconnect(why) {
+    if (reconnects >= 3) { setState("idle"); emit("error", { message: why }); return; }
+    reconnects++;
+    finishUser(); finishSaurus(true);
+    talking = false;
+    setState("thinking");
+    setTimeout(() => {
+      if (!running) return;
+      resuming = true;
+      connect().then(() => {
+        resuming = false;
+        setTimeout(() => { reconnects = 0; }, 20000);
+        setState("idle");
+      }, (e) => { resuming = false; if (running) reconnect(e.message); });
+    }, 300 * reconnects);
   }
 
   function close() {
@@ -240,10 +300,12 @@
   function finishUser() {
     if (!inText) return;
     emit("transcript", { who: "user", text: inText.trim(), final: true });
+    remember("Learner", inText.trim());
     inText = "";
   }
   function finishSaurus(cut) {
     if (outText) emit("transcript", { who: "saurus", text: outText.trim() + (cut ? " —" : ""), final: true });
+    remember("Saurus", outText.trim());
     outText = "";
     speaking = false;
   }
@@ -293,10 +355,37 @@
       case "level_down": return changeLevel(-1);
       case "log_struggle": return logAnswer(args.word, false, args.note);
       case "log_answer": return logAnswer(args.word, !!args.correct, args.note);
+      case "switch_language": {
+        const raw = String(args.language || "").toLowerCase();
+        const code = LANG[raw] ? raw : CODE_OF[raw];
+        if (!code) return "unknown language; choose fr, de, es, sv or hi";
+        if (code === lang) return `already practising ${LANG[code]}`;
+        const info = await switchLanguage(code, true);
+        return info ? `switched to ${LANG[code]}. ${info} From now on speak ${LANG[code]} at that level.` : "not switched";
+      }
       case "offer_drill": emit("drill_offer", { topic: String(args.topic || "this page") }); return "offered; wait for the learner's answer";
       default: return "unknown tool";
     }
   }
+
+  // Switch the target language: costume puff, page re-translation (via the
+  // "language"/"level" events), and that language's own level and memory.
+  // Returns what the model should know, or null if nothing changed.
+  async function switchLanguage(code, fromModel) {
+    if (!LANG[code] || code === lang) return null;
+    lang = code;
+    recall = null;
+    save("saurus.language", code);
+    emit("language", { code });
+    if (!fromModel && speaking) finishSaurus(true);
+    if (!fromModel) setState("thinking");
+    try { await loadMemory(code); } catch (e) { memoryProblem(e); }
+    if (lang !== code) return null; // switched again meanwhile
+    emit("level", { language: code, level: levels[code] });
+    const note = struggleNote(code);
+    return `My ${LANG[code]} level is ${levels[code]} of 4: ${LEVEL[levels[code]]}.${note ? " " + note : ""}`;
+  }
+  const CODE_OF = { french: "fr", german: "de", spanish: "es", swedish: "sv", hindi: "hi" };
 
   function changeLevel(delta) {
     const next = Math.max(1, Math.min(4, levels[lang] + delta));
@@ -318,40 +407,68 @@
     4: "Translate the whole block into natural, idiomatic target language. Wrap one or two advanced or idiomatic words in <mark></mark>.",
   };
 
+  // Translation speed: newer Gemini models "think" by default, which adds
+  // seconds per request and isn't needed here. Try the cheapest thinking
+  // setting the model accepts, falling back if it rejects the field.
+  const THINKING = [{ thinkingLevel: "minimal" }, { thinkingBudget: 0 }, null];
+  let thinkIdx = 0;
+  // Finished translations, so revisiting a level or language is instant.
+  const cache = new Map();
+  const cacheKey = (language, level, text) => `${language}|${level}|${text}`;
+
   async function translateBatch(blocks, language, level) {
+    const out = [], todo = [];
+    for (const b of blocks) {
+      const hit = cache.get(cacheKey(language, level, b.text));
+      if (hit !== undefined) out.push({ id: b.id, html: hit }); else todo.push(b);
+    }
+    if (!todo.length) return out;
     const prompt = [
       `Adapt each text block for a learner of ${LANG[language] || language}. Level ${level} of 4.`,
       GUIDE[level] || GUIDE[1],
       "Return every block with the same id. Output plain text with <mark> tags only: no other HTML, and escape &, < and > in the text.",
       "Blocks:",
-      JSON.stringify(blocks),
+      JSON.stringify(todo),
     ].join("\n");
+    const generationConfig = {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "ARRAY",
+        items: { type: "OBJECT", properties: { id: { type: "STRING" }, html: { type: "STRING" } }, required: ["id", "html"] },
+      },
+    };
+    const mode = thinkIdx;
+    if (THINKING[mode]) generationConfig.thinkingConfig = THINKING[mode];
     const res = await fetch(REST_URL(TEXT_MODEL), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "ARRAY",
-            items: { type: "OBJECT", properties: { id: { type: "STRING" }, html: { type: "STRING" } }, required: ["id", "html"] },
-          },
-        },
-      }),
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
     });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(body.error && body.error.message) || res.statusText}`);
+    if (!res.ok) {
+      const msg = (body.error && body.error.message) || res.statusText;
+      if (res.status === 400 && THINKING[mode] && /think/i.test(msg)) { // this model rejects that setting
+        if (thinkIdx === mode) thinkIdx = mode + 1;
+        return out.concat(await translateBatch(todo, language, level));
+      }
+      throw new Error(`Gemini ${res.status}: ${msg}`);
+    }
     const text = ((body.candidates && body.candidates[0] && body.candidates[0].content && body.candidates[0].content.parts) || [])
-      .map((p) => p.text || "").join("");
-    const out = JSON.parse(text);
-    if (!Array.isArray(out)) throw new Error("Gemini returned no translation");
-    for (const item of out) {
-      for (const m of String((item && item.html) || "").matchAll(/<mark>([^<]+)<\/mark>/gi)) {
+      .filter((p) => !p.thought).map((p) => p.text || "").join("");
+    const got = JSON.parse(text);
+    if (!Array.isArray(got)) throw new Error("Gemini returned no translation");
+    const textOf = new Map(todo.map((b) => [b.id, b.text]));
+    for (const item of got) {
+      if (!item || typeof item.html !== "string") continue;
+      if (textOf.has(item.id)) {
+        if (cache.size > 3000) cache.delete(cache.keys().next().value);
+        cache.set(cacheKey(language, level, textOf.get(item.id)), item.html);
+      }
+      for (const m of item.html.matchAll(/<mark>([^<]+)<\/mark>/gi)) {
         for (const w of m[1].split(/[^\p{L}\p{M}'’-]+/u)) if (w) marked.add(w.toLowerCase());
       }
     }
-    return out;
+    return out.concat(got);
   }
 
   // ---------------------------------------------------------------------
@@ -362,6 +479,7 @@
       running = true;
       page = { url: String(pageUrl || ""), text: String(pageText || "") };
       talking = false; inText = ""; outText = ""; speaking = false;
+      history.length = 0; reconnects = 0;
       setState("thinking");
       try {
         await loadMemory(lang); // before connecting, so the session knows level and struggles
@@ -420,6 +538,7 @@
     sendText(text) {
       if (!live) { emit("error", { message: "Not connected to Gemini Live" }); return; }
       if (speaking) finishSaurus(true);
+      remember("Learner", String(text));
       say(String(text));
       setState("thinking");
     },
@@ -433,18 +552,8 @@
     },
 
     async setLanguage(code) {
-      if (!LANG[code] || code === lang) return;
-      lang = code;
-      recall = null;
-      save("saurus.language", code);
-      emit("language", { code });
-      if (speaking) finishSaurus(true);
-      setState("thinking");
-      try { await loadMemory(code); } catch (e) { memoryProblem(e); }
-      if (lang !== code) return; // switched again meanwhile
-      emit("level", { language: code, level: levels[code] });
-      const note = struggleNote(code);
-      say(`(Switch now: from here on speak ${LANG[code]} with me. My ${LANG[code]} level is ${levels[code]} of 4: ${LEVEL[levels[code]]}.${note ? " " + note : ""} Greet me in ${LANG[code]} and continue our conversation about the page.)`);
+      const info = await switchLanguage(code, false);
+      if (info) say(`(Switch now: from here on speak ${LANG[code]} with me. ${info} Greet me in ${LANG[code]} and continue our conversation about the page.)`);
     },
 
     stop() {

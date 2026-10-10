@@ -345,3 +345,9 @@ s3_region = "env(S3_REGION)"
 s3_access_key = "env(S3_ACCESS_KEY)"
 # Configures AWS_SECRET_ACCESS_KEY for S3 bucket
 s3_secret_key = "env(S3_SECRET_KEY)"
+
+# Saurus: the browser opens a WebSocket to this function and cannot send an
+# Authorization header, so JWT verification is off. The Gemini key stays in
+# the function's secrets.
+[functions.gemini]
+verify_jwt = false
