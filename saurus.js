@@ -42,14 +42,33 @@
     return SCRIPT_SRC ? new URL(path, SCRIPT_SRC).href : path;
   }
 
-  // Trusted Types-safe innerHTML for our own static markup.
-  let ttPolicy = null;
-  try {
-    if (window.trustedTypes && trustedTypes.createPolicy) {
-      ttPolicy = trustedTypes.createPolicy("saurus", { createHTML: (s) => s });
+  // Our own static markup (widget, icons, drawn pet) is built element by
+  // element instead of innerHTML, so it works on pages that enforce Trusted
+  // Types (Google Docs, Gmail...) without asking them for a policy.
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  const VOID = new Set(["input", "br", "img"]);
+  function setHTML(el, html) {
+    const frag = document.createDocumentFragment();
+    const stack = [frag];
+    const tokens = String(html).match(/<\/?[a-zA-Z][^>]*>|[^<]+/g) || [];
+    for (const t of tokens) {
+      const top = stack[stack.length - 1];
+      if (t[0] !== "<") {
+        if (top.nodeName === "STYLE" || top.nodeName === "style") top.appendChild(document.createTextNode(t));
+        else if (t.trim() || top !== frag) top.appendChild(document.createTextNode(decodeEntities(t)));
+        continue;
+      }
+      if (t[1] === "/") { if (stack.length > 1) stack.pop(); continue; }
+      const name = t.match(/^<([a-zA-Z][\w-]*)/)[1];
+      const inSvg = name === "svg" || (top.namespaceURI === SVG_NS);
+      const node = inSvg ? document.createElementNS(SVG_NS, name) : document.createElement(name);
+      const attrs = t.slice(name.length + 1).replace(/\/?>$/, "");
+      for (const a of attrs.matchAll(/([^\s=]+)(?:\s*=\s*"([^"]*)")?/g)) node.setAttribute(a[1], decodeEntities(a[2] ?? ""));
+      top.appendChild(node);
+      if (!/\/>$/.test(t) && !VOID.has(name.toLowerCase())) stack.push(node);
     }
-  } catch (_) { /* policy name not allowed; fall back to strings */ }
-  function setHTML(el, html) { el.innerHTML = ttPolicy ? ttPolicy.createHTML(html) : html; }
+    el.replaceChildren(frag);
+  }
 
   // ---------------------------------------------------------------------
   // Art (from saurus-pitch.html)
