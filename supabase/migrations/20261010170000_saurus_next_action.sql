@@ -1,8 +1,8 @@
 -- Saurus decides what to practise next, inside Supabase.
 --
--- Same rules as backend/src/domain.js (mastery +15 right / -10 wrong,
--- "struggling" and "learned" words, recall the most-missed word first),
--- running as database functions so no local server is needed.
+-- Mastery +15 right / -10 wrong, "struggling" and "learned" words, recall
+-- the most-missed word first, running as database functions so no server
+-- is needed.
 
 alter table public.saurus_struggles
   add column if not exists correct integer  not null default 0,
