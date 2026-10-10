@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saurus microphone</title>
+<style>
+  :root{--bg:#EEF3EC;--surface:#fff;--fg:#14251C;--muted:#56695D;--accent:#1F7A4D;--accent-ink:#fff;--line:#C9D6CC}
+  @media (prefers-color-scheme: dark){:root{--bg:#0F1A14;--surface:#18271F;--fg:#E6EFE8;--muted:#9DB3A5;--accent:#5FD08F;--accent-ink:#06170D;--line:#2C4035}}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;padding:16px}
+  main{max-width:28rem;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:28px;text-align:center}
+  img{width:96px;height:96px}
+  h1{font-size:22px;margin:8px 0}
+  p{color:var(--muted);margin:8px 0 18px}
+  button{font:inherit;font-weight:700;border:0;border-radius:999px;padding:10px 22px;background:var(--accent);color:var(--accent-ink);cursor:pointer}
+  #status{margin-top:16px;font-weight:600;color:var(--fg)}
+</style>
+</head>
+<body>
+<main>
+  <img src="assets/saurus-de-2.png" alt="">
+  <h1>Let Saurus hear you</h1>
+  <p>Allow the microphone once, and push-to-talk works on every website without asking again. Saurus only listens while you hold the talk button or Space.</p>
+  <button id="allow" type="button">Allow microphone</button>
+  <div id="status" role="status"></div>
+</main>
+<script src="mic-setup.js"></script>
+</body>
+</html>
