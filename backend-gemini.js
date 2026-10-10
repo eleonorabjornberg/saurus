@@ -46,9 +46,28 @@
   function load(key, fallback) {
     try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; } catch (_) { return fallback; }
   }
-  function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (_) {} }
+  // In the extension, localStorage belongs to each website, so the language
+  // and levels are also kept in chrome.storage.local, shared by all sites.
+  const extStore = (() => {
+    try { return typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local; } catch (_) { return null; }
+  })();
+  function save(key, v) {
+    try { localStorage.setItem(key, JSON.stringify(v)); } catch (_) {}
+    try { if (extStore) extStore.set({ [key]: v }, () => void chrome.runtime.lastError); } catch (_) {}
+  }
   const levels = Object.assign({ fr: 1, de: 1, es: 1, sv: 1, hi: 1 }, load("saurus.levels", {}));
   let lang = LANG[load("saurus.language", "")] ? load("saurus.language", "fr") : (LANG[cfg.language] ? cfg.language : "de");
+  const prefsReady = new Promise((resolve) => {
+    if (!extStore) return resolve();
+    try {
+      extStore.get(["saurus.language", "saurus.levels"], (r) => {
+        if (r && LANG[r["saurus.language"]]) lang = r["saurus.language"];
+        if (r && r["saurus.levels"] && typeof r["saurus.levels"] === "object") Object.assign(levels, r["saurus.levels"]);
+        resolve();
+      });
+    } catch (_) { resolve(); }
+    setTimeout(resolve, 1000);
+  });
   const struggles = { fr: [], de: [], es: [], sv: [], hi: [] }; // [{word, note, misses}], most missed first
   const marked = new Set(); // target-language words the last translations marked on the page
   const nextAction = { fr: null, de: null, es: null, sv: null, hi: null }; // from saurus_next_action
@@ -572,6 +591,7 @@
       talking = false; inText = ""; outText = ""; speaking = false;
       history.length = 0; reconnects = 0;
       setState("thinking");
+      await prefsReady;
       try {
         await loadMemory(lang); // before connecting, so the session knows level and struggles
       } catch (e) {
