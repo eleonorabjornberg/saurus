@@ -151,10 +151,10 @@ using it share one memory, handy for a rehearsed demo.
 **What Saurus does with it:** on ⌥S and on every language switch it calls
 `saurus_memory` to load your level and most-missed words. Gemini gets those
 words in its instructions, opens by bringing one back ("last time you had
-trouble with *Regeln*…"), and Saurus highlights it on the page.
+trouble with *Regeln*…"), and Saurus highlights it on the page. Page
+translation works those words back in where they fit.
 
-**Deciding what to practise next** (also in Supabase, same rules as
-`backend/src/domain.js`): each word has a mastery score, +15 for a right
+**Deciding what to practise next** (also in Supabase): each word has a mastery score, +15 for a right
 answer and −10 for a wrong one. A word is *struggling* while it has misses
 and either mastery below 70 or as many misses as right answers; it is
 *learned* at mastery ≥ 70 with more right than wrong. `saurus_next_action`
