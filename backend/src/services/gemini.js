@@ -24,15 +24,68 @@ const recallJsonSchema = {
   },
 };
 
-export function createGeminiService({ apiKey, model = "gemini-2.5-flash" }) {
-  const ai = new GoogleGenAI({ apiKey });
+const MAX_OUTPUT_TOKENS = 8192;
+const THINKING_BUDGET = 2048;
+const MAX_ATTEMPTS = 2;
+
+export class GeminiStructuredOutputError extends Error {
+  constructor() {
+    super("Gemini returned invalid structured output after retry");
+    this.name = "GeminiStructuredOutputError";
+  }
+}
+
+function diagnostics(response, attempt, failure) {
+  const usage = response?.usageMetadata ?? {};
+  return {
+    event: "gemini_structured_output_failure",
+    attempt,
+    failure,
+    finishReason: response?.candidates?.[0]?.finishReason ?? "UNKNOWN",
+    responseLength: typeof response?.text === "string" ? response.text.length : 0,
+    promptTokenCount: usage.promptTokenCount,
+    candidateTokenCount: usage.candidatesTokenCount,
+    thoughtsTokenCount: usage.thoughtsTokenCount,
+    totalTokenCount: usage.totalTokenCount,
+  };
+}
+
+export function createGeminiService({ apiKey, model = "gemini-2.5-flash", client, logger = console }) {
+  const ai = client ?? new GoogleGenAI({ apiKey });
   async function generate(prompt, schema, parser) {
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: { responseMimeType: "application/json", responseJsonSchema: schema, temperature: 0.2, maxOutputTokens: 1200 },
-    });
-    return parser.parse(JSON.parse(response.text));
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseJsonSchema: schema,
+          temperature: 0.2,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          thinkingConfig: { thinkingBudget: THINKING_BUDGET },
+        },
+      });
+      const text = typeof response.text === "string" ? response.text.trim() : "";
+      const finishReason = response.candidates?.[0]?.finishReason;
+      let failure;
+
+      if (!text) {
+        failure = "empty_response";
+      } else if (finishReason === "MAX_TOKENS") {
+        failure = "max_tokens";
+      } else {
+        try {
+          return parser.parse(JSON.parse(text));
+        } catch (error) {
+          failure = error instanceof SyntaxError ? "invalid_json" : "schema_validation";
+        }
+      }
+
+      const details = diagnostics(response, attempt, failure);
+      if (attempt < MAX_ATTEMPTS) logger.warn(details);
+      else logger.error(details);
+    }
+    throw new GeminiStructuredOutputError();
   }
   return {
     adaptArticle({ articleText, learner, struggles }) {
