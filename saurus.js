@@ -853,7 +853,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
 
   // Translate in small batches, what's on screen first, and show each batch
   // as soon as it arrives (long pages would otherwise sit grey for ages).
-  const BATCH = 8, PARALLEL = 3, MAX_BLOCKS = 150;
+  const FIRST_BATCH = 4, BATCH = 8, PARALLEL = 5, MAX_BLOCKS = 150;
   function translateAll() {
     if (!active || !lang || !blocks.length) return;
     const my = ++trToken;
@@ -865,7 +865,9 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     const order = blocks.map((b, i) => ({ b, d: dist(b), i }))
       .sort((x, y) => x.d - y.d || x.i - y.i).slice(0, MAX_BLOCKS).map((x) => x.b);
     const queue = [];
-    for (let i = 0; i < order.length; i += BATCH) queue.push(order.slice(i, i + BATCH));
+    // a small first batch (what's on screen) comes back fastest
+    queue.push(order.slice(0, FIRST_BATCH));
+    for (let i = FIRST_BATCH; i < order.length; i += BATCH) queue.push(order.slice(i, i + BATCH));
     clearHighlights();
     for (const b of order) b.el.classList.add("saurus-pending");
     let failed = false;

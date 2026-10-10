@@ -407,40 +407,68 @@
     4: "Translate the whole block into natural, idiomatic target language. Wrap one or two advanced or idiomatic words in <mark></mark>.",
   };
 
+  // Translation speed: newer Gemini models "think" by default, which adds
+  // seconds per request and isn't needed here. Try the cheapest thinking
+  // setting the model accepts, falling back if it rejects the field.
+  const THINKING = [{ thinkingLevel: "minimal" }, { thinkingBudget: 0 }, null];
+  let thinkIdx = 0;
+  // Finished translations, so revisiting a level or language is instant.
+  const cache = new Map();
+  const cacheKey = (language, level, text) => `${language}|${level}|${text}`;
+
   async function translateBatch(blocks, language, level) {
+    const out = [], todo = [];
+    for (const b of blocks) {
+      const hit = cache.get(cacheKey(language, level, b.text));
+      if (hit !== undefined) out.push({ id: b.id, html: hit }); else todo.push(b);
+    }
+    if (!todo.length) return out;
     const prompt = [
       `Adapt each text block for a learner of ${LANG[language] || language}. Level ${level} of 4.`,
       GUIDE[level] || GUIDE[1],
       "Return every block with the same id. Output plain text with <mark> tags only: no other HTML, and escape &, < and > in the text.",
       "Blocks:",
-      JSON.stringify(blocks),
+      JSON.stringify(todo),
     ].join("\n");
+    const generationConfig = {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "ARRAY",
+        items: { type: "OBJECT", properties: { id: { type: "STRING" }, html: { type: "STRING" } }, required: ["id", "html"] },
+      },
+    };
+    const mode = thinkIdx;
+    if (THINKING[mode]) generationConfig.thinkingConfig = THINKING[mode];
     const res = await fetch(REST_URL(TEXT_MODEL), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "ARRAY",
-            items: { type: "OBJECT", properties: { id: { type: "STRING" }, html: { type: "STRING" } }, required: ["id", "html"] },
-          },
-        },
-      }),
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
     });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(`Gemini ${res.status}: ${(body.error && body.error.message) || res.statusText}`);
+    if (!res.ok) {
+      const msg = (body.error && body.error.message) || res.statusText;
+      if (res.status === 400 && THINKING[mode] && /think/i.test(msg)) { // this model rejects that setting
+        if (thinkIdx === mode) thinkIdx = mode + 1;
+        return out.concat(await translateBatch(todo, language, level));
+      }
+      throw new Error(`Gemini ${res.status}: ${msg}`);
+    }
     const text = ((body.candidates && body.candidates[0] && body.candidates[0].content && body.candidates[0].content.parts) || [])
-      .map((p) => p.text || "").join("");
-    const out = JSON.parse(text);
-    if (!Array.isArray(out)) throw new Error("Gemini returned no translation");
-    for (const item of out) {
-      for (const m of String((item && item.html) || "").matchAll(/<mark>([^<]+)<\/mark>/gi)) {
+      .filter((p) => !p.thought).map((p) => p.text || "").join("");
+    const got = JSON.parse(text);
+    if (!Array.isArray(got)) throw new Error("Gemini returned no translation");
+    const textOf = new Map(todo.map((b) => [b.id, b.text]));
+    for (const item of got) {
+      if (!item || typeof item.html !== "string") continue;
+      if (textOf.has(item.id)) {
+        if (cache.size > 3000) cache.delete(cache.keys().next().value);
+        cache.set(cacheKey(language, level, textOf.get(item.id)), item.html);
+      }
+      for (const m of item.html.matchAll(/<mark>([^<]+)<\/mark>/gi)) {
         for (const w of m[1].split(/[^\p{L}\p{M}'’-]+/u)) if (w) marked.add(w.toLowerCase());
       }
     }
-    return out;
+    return out.concat(got);
   }
 
   // ---------------------------------------------------------------------
