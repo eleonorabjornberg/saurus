@@ -9,7 +9,10 @@
 (function () {
   "use strict";
   const toggle = () => window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "s", altKey: true, bubbles: true }));
-  if (document.documentElement.hasAttribute("data-saurus-loaded")) { toggle(); return; }
+  const loaded = document.documentElement.getAttribute("data-saurus-loaded");
+  // The Saurus extension is already here: it only answers real key presses.
+  if (loaded === "extension") { alert("You have the Saurus extension: press Alt+S (Option+S on a Mac) to open Saurus."); return; }
+  if (loaded !== null) { toggle(); return; }
   const base = (document.currentScript && document.currentScript.src) || "https://eleonorabjornberg.github.io/saurus/bookmarklet.js";
   const files = ["config.js", "supabase-config.js", "backend.js", "backend-gemini.js", "backend-mock.js", "saurus.js"];
   (function next(i) {

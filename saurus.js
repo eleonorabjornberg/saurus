@@ -12,7 +12,10 @@
   const root = document.documentElement;
   if (window.__saurusLoaded || root.hasAttribute("data-saurus-loaded")) return;
   window.__saurusLoaded = true;
-  root.setAttribute("data-saurus-loaded", "");
+  // "extension" or "page": the bookmarklet needs to know which one is here.
+  let fromExtension = false;
+  try { fromExtension = !!(typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id); } catch (_) {}
+  root.setAttribute("data-saurus-loaded", fromExtension ? "extension" : "page");
 
   // ---------------------------------------------------------------------
   // Constants
