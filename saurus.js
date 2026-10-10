@@ -175,7 +175,16 @@ button{font:inherit;color:inherit;cursor:pointer}
 .float{display:block;width:100%;height:100%;animation:float 4.2s ease-in-out infinite}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 .hop,.mover,.art{width:100%;height:100%;display:block;transform-origin:50% 100%}
+.art{position:relative}
 .art svg,.art img{width:100%;height:100%;display:block}
+.art img{position:absolute;inset:0}
+/* frame swaps: blink and mouth-open overlays on the base picture */
+.art .f-blink,.art .f-talk{opacity:0}
+.art.blink .f-blink{opacity:1}
+.art.talking .f-talk{opacity:1}
+.art.talking .f-blink{opacity:0}
+.speak-fallback[data-state="speaking"] .art .f-talk{animation:flap .36s steps(1) infinite}
+@keyframes flap{0%{opacity:1}50%{opacity:0}}
 .d-body{fill:var(--dino);stroke:var(--dino-line);stroke-width:3;stroke-linejoin:round}
 .d-leg2{fill:var(--dino-spot);stroke:var(--dino-line);stroke-width:3}
 .d-belly{fill:var(--dino-spot);stroke:var(--dino-line);stroke-width:2;stroke-linejoin:round}
@@ -224,7 +233,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 @keyframes pop{0%{transform:scale(1)}30%{transform:scale(.7)}62%{transform:scale(1.12)}100%{transform:scale(1)}}
 
 @media (prefers-reduced-motion: reduce){
-  .saurus,.caret::after,.puffing .puff i,.puffing .art,.mover,.hop,.celebrating .hop,.d-mouth,.float,.ctl.held svg{animation:none !important}
+  .saurus,.caret::after,.puffing .puff i,.puffing .art,.mover,.hop,.celebrating .hop,.d-mouth,.float,.ctl.held svg,.art .f-talk{animation:none !important}
   [data-state="listening"] .mover{transform:none}
   .log{scroll-behavior:auto;transition:none}
   .dino-wrap{transition:none}
@@ -637,14 +646,21 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     ui.wrap.title = who;
     ui.wrap.setAttribute("aria-label", `Saurus, ${who}`);
     if (!l) return;
-    const url = assetUrl(`assets/saurus-${l}-${lv}.png`);
-    pngExists(url).then((ok) => {
-      if (!ok || my !== artToken) return;
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = "";
-      img.draggable = false;
-      ui.art.replaceChildren(img);
+    // Optional frames next to the base art: -blink (eyes closed), -talk (mouth open).
+    const url = (suffix) => assetUrl(`assets/saurus-${l}-${lv}${suffix}.png`);
+    Promise.all(["", "-blink", "-talk"].map((sfx) => pngExists(url(sfx)))).then(([base, blink, talk]) => {
+      if (!base || my !== artToken) return;
+      const frame = (sfx, cls) => {
+        const img = document.createElement("img");
+        img.src = url(sfx);
+        img.alt = "";
+        img.draggable = false;
+        img.className = cls;
+        return img;
+      };
+      ui.art.replaceChildren(frame("", "f-base"),
+        ...(blink ? [frame("-blink", "f-blink")] : []),
+        ...(talk ? [frame("-talk", "f-talk")] : []));
     });
   }
 
@@ -664,7 +680,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     avatarState = s;
     if (!ui) return;
     ui.root.dataset.state = s;
-    if (s !== "speaking") { ui.mover.style.transform = ""; ui.art.style.setProperty("--m", "0"); }
+    if (s !== "speaking") { ui.mover.style.transform = ""; ui.art.style.setProperty("--m", "0"); ui.art.classList.remove("talking"); }
   }
 
   let celebrateTimer = 0;
@@ -708,6 +724,10 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     loud += (Math.min(1, rms * 5) - loud) * 0.35;
     ui.mover.style.transform = `translateY(${(-loud * 6).toFixed(2)}px) scale(${(1 - loud * 0.03).toFixed(3)},${(1 + loud * 0.05).toFixed(3)})`;
     ui.art.style.setProperty("--m", Math.min(1, loud * 1.6).toFixed(2));
+    // mouth-open frame while the voice is loud (with a little hysteresis)
+    const open = ui.art.classList.contains("talking");
+    if (!open && loud > 0.14) ui.art.classList.add("talking");
+    else if (open && loud < 0.08) ui.art.classList.remove("talking");
   }
 
   // ---------------------------------------------------------------------
