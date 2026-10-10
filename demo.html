@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Ledger: New Rules for AI at Work</title>
+<title>Saurus: a language tutor in your browser</title>
 <style>
   :root{--bg:#fbfaf7;--fg:#1d1d1b;--muted:#6b6a64;--line:#e4e1d8;--link:#1f5fa8}
   @media (prefers-color-scheme: dark){:root{--bg:#141412;--fg:#ecebe6;--muted:#a3a29b;--line:#2e2d29;--link:#8cb8f0}}
@@ -53,59 +53,85 @@
   <span class="hint">← drag to your bookmarks bar, click it on any article</span>
 </div>
 <header class="site">
-  <span class="logo">The Ledger</span>
+  <span class="logo">🦕 Saurus</span>
   <nav aria-label="Sections">
     <ul>
-      <li><a href="#">Markets</a></li>
-      <li><a href="#">Law</a></li>
-      <li><a href="#">Technology</a></li>
-      <li><a href="#">Opinion</a></li>
+      <li><a href="#try">Try it</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#built">How it's built</a></li>
+      <li><a href="https://github.com/eleonorabjornberg/saurus">GitHub</a></li>
     </ul>
   </nav>
 </header>
 
 <main class="wrap">
   <article>
-    <p class="kicker">Regulation</p>
-    <h1>New rules for AI at work: what changes this year</h1>
-    <p class="byline">By the Ledger law team · 6 minute read</p>
+    <p class="kicker">The New Agentic Economy Hackathon · Saurus</p>
+    <h1>Saurus: a language tutor that lives in your browser</h1>
+    <p class="byline">By Eleonora Björnberg and Mahdi Yusuf · Built with Gemini and Supabase</p>
 
-    <p>For years, companies used AI with very few rules. That time is over. A new law now asks every company that uses AI in important decisions to explain how the machine reached its decision, and to keep a human in the loop.</p>
+    <p>Saurus is a small dinosaur that lives in your browser and helps you learn a language through what you already read. Press Alt+S on any article: the page changes to your level, and Saurus talks with you about it, by voice or by typing. It remembers your mistakes, practises them with you, and grows up as you improve.</p>
 
-    <p>The government says the goal is simple: people should know when a machine decides something about their job, their loan or their money. Banks and insurance companies are the first in line, because their decisions change lives.</p>
+    <p><strong>Try it right here:</strong> press the green <em>Try Saurus</em> button at the top, or Alt+S (Option+S on a Mac). This page is about to become your first lesson.</p>
 
-    <h2>Who must follow the new rules?</h2>
-    <p>The law sorts AI systems by risk. A chatbot that answers questions about opening hours is low risk. A system that decides who gets a loan, a job or a flat is high risk, and high risk means more work.</p>
+    <h2 id="problem">The problem</h2>
+    <p>Most of us learn languages in a separate app, away from our real day. The basics on apps are too basic, we almost never speak, and real classes are expensive. Everyone knows the best way to learn is immersion, but immersion is out of reach for most people.</p>
+    <p>At the same time, we read every day: the news, newsletters, lecture notes, work documents. That reading is dead time for language learning.</p>
+
+    <h2 id="who">Who it is for</h2>
+    <p>Saurus is for busy people learning a language for something real: an exam, a move, a new job. They don't have time for lessons, but they do read every day. Saurus turns that reading into practice, on topics they actually care about.</p>
+
+    <h2 id="how">How it works</h2>
     <ul>
-      <li>Banks must keep a report for every automated loan decision.</li>
-      <li>Companies must tell customers when a machine makes the first decision.</li>
-      <li>A human must be able to check and change any important decision.</li>
-      <li>Small companies get one more year before the rules apply.</li>
+      <li><strong>The page meets you at your level.</strong> As a beginner, the page stays in your language with a few key words swapped. Then it becomes simple text, and finally natural, fluent text.</li>
+      <li><strong>Saurus speaks first.</strong> It asks you about the substance of the page, not textbook sentences, and gently corrects you.</li>
+      <li><strong>Press any word</strong> to ask what it means. Press and hold a paragraph to see the original.</li>
+      <li><strong>It remembers.</strong> Your level and the words you get wrong are saved per language. Next time, Saurus brings them back, highlights them on the page and checks you know them.</li>
+      <li><strong>It decides what to practise.</strong> When the same mistake comes back, Saurus offers a five-minute drill.</li>
+      <li><strong>It grows with you.</strong> The dinosaur ages from hatchling to elder as your level rises, and changes costume when you switch language.</li>
+      <li><strong>Five languages:</strong> French, German, Spanish, Swedish and Hindi. Switch by voice ("let's do Spanish") or with Alt+1 to 5.</li>
+      <li><strong>Voice or text.</strong> Hold the talk button (or Space) to speak, or press the pencil to type quietly.</li>
     </ul>
 
-    <h2>What does it cost?</h2>
-    <p>The price is not small. Experts say a big bank may need a new team of ten people just to write reports. Fines for breaking the rules can reach six percent of a company's yearly money from customers.</p>
+    <h2 id="try">Three ways to try it</h2>
+    <ul>
+      <li><strong>On this page:</strong> press <em>Try Saurus</em> at the top. It works on phones too. Use the language and level buttons to see the page change.</li>
+      <li><strong>On any website:</strong> drag the blue <em>Saurus anywhere</em> button to your bookmarks bar, open any article, and click it.</li>
+      <li><strong>The full Chrome extension, with your own account:</strong> <a href="https://github.com/eleonorabjornberg/saurus/archive/refs/heads/main.zip">download the ZIP</a>, open chrome://extensions, turn on Developer mode, choose Load unpacked, pick the unzipped folder, click the Saurus icon to create an account, then press Alt+S on any article. It also reads Google Docs and Slides from a screenshot.</li>
+    </ul>
 
-    <blockquote><p>“A decision about your future should always have a reason a human can read,” said the judge who led the court review last week.</p></blockquote>
+    <h2 id="why">Why it is more than a prompt</h2>
+    <p>A chatbot answers when you ask. Saurus is an agent: it speaks first, decides when to check you, drills you or levels you up, and remembers across pages, sessions and languages. Its decisions run in the database, so they follow you everywhere.</p>
 
-    <h2>What happens next?</h2>
-    <p>Other countries are watching. If the rules work, the same ideas may spread around the world in the next few years. If they do not, companies will say the law was too slow and too expensive. The first report on the new law is due next summer.</p>
+    <h2 id="built">How it is built</h2>
+    <ul>
+      <li><strong>Gemini Live</strong> for the real-time voice conversation, with tools the tutor calls while it talks: highlight a word, log a mistake, level up, offer a drill, switch language.</li>
+      <li><strong>Gemini Flash</strong> translates the page at your level, what is on screen first, and reads screenshots of Google Docs and Slides.</li>
+      <li><strong>Supabase</strong> is the whole backend: database functions keep your level, mistakes and session summaries and decide what to practise next; an Edge Function keeps the Gemini keys secret; Supabase Auth gives every learner their own account, protected by row-level security.</li>
+      <li><strong>A Chrome extension</strong> in plain JavaScript, with no build step. The microphone is allowed once for all sites.</li>
+    </ul>
+
+    <h2 id="next">What comes next</h2>
+    <ul>
+      <li>One-click install from the Chrome Web Store.</li>
+      <li>A phone app, and learning from videos through their captions.</li>
+      <li>A placement quiz on the first day, and Google sign-in.</li>
+    </ul>
+
+    <blockquote>You're not bad at languages. You've just been learning them in the wrong place. Saurus is here to help.</blockquote>
   </article>
 
-  <aside aria-label="More from The Ledger">
-    <h3>Related</h3>
+  <aside aria-label="Links">
+    <h3>Links</h3>
     <ul>
-      <li><a href="#">Five questions to ask your bank about AI</a></li>
-      <li><a href="#">The court case that started it all</a></li>
+      <li><a href="https://github.com/eleonorabjornberg/saurus">Source code on GitHub</a></li>
+      <li><a href="https://github.com/eleonorabjornberg/saurus/archive/refs/heads/main.zip">Download the Chrome extension (ZIP)</a></li>
+      <li><a href="https://github.com/eleonorabjornberg/saurus/blob/main/AUTH_SETUP.md">How accounts work</a></li>
     </ul>
-    <form onsubmit="event.preventDefault(); this.querySelector('button').textContent = 'Thanks!';">
-      <input type="email" placeholder="you@example.com" aria-label="Email for the newsletter">
-      <button type="submit">Get the newsletter</button>
-    </form>
   </aside>
 </main>
 
-<footer>Saurus demo page. Press <kbd>Alt</kbd>+<kbd>S</kbd> to call Saurus.</footer>
+<footer>Saurus · The New Agentic Economy Hackathon · Press <kbd>Alt</kbd>+<kbd>S</kbd> (<kbd>⌥</kbd><kbd>S</kbd> on Mac) to call Saurus.</footer>
 
 <script>
   // Buttons for visitors without a keyboard shortcut (phones, tablets):
