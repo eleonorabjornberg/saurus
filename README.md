@@ -8,7 +8,8 @@ mock backend, and talks to the real backend through one object,
 | File | What it is |
 |---|---|
 | `saurus.js` | The whole widget. One `<script>` tag injects it into any page (shadow DOM). |
-| `backend-mock.js` | A fake `SaurusBackend` with scripted replies, timers and a synthetic voice. |
+| `backend.js` | **The real backend goes here.** Empty for now, so the mock runs. |
+| `backend-mock.js` | A fake `SaurusBackend` with scripted replies, timers and a synthetic voice. Steps aside automatically once `backend.js` sets `window.SaurusBackend`. |
 | `demo.html` | An article page that loads both. |
 | `manifest.json` | Chrome extension (Manifest V3) that injects both as content scripts. |
 | `assets/` | Optional avatar art: `saurus-{fr,de,es}-{1..4}.png`. Missing files fall back to the built-in SVG. |
@@ -47,10 +48,33 @@ Mock only: typing `/error` makes the mock emit an `error` event.
 ## Backend interface (for the backend)
 
 `saurus.js` never calls an API. It only uses `window.SaurusBackend`, which
-must exist by the time the user presses Alt+S. To plug in the real backend,
-load your script instead of `backend-mock.js` (in `demo.html` and in
-`manifest.json` → `content_scripts.js`). In the extension it runs as a
-content script in the same isolated world as `saurus.js`.
+must exist by the time the user presses Alt+S.
+
+### Adding the real backend
+
+1. Put your code in `backend.js` (replace the placeholder). It must set
+   `window.SaurusBackend` **synchronously** when the file runs; connect to
+   Supabase / Gemini later, inside `start()`.
+2. That's it: `demo.html` and `manifest.json` already load `backend.js`
+   before `backend-mock.js`, and the mock only installs itself when
+   `window.SaurusBackend` is not set yet. No other file needs to change.
+3. Extra files (for example the Supabase client): Chrome extensions can't
+   load scripts from a CDN, so save them in the repo (e.g.
+   `vendor/supabase.js`, the UMD build from `@supabase/supabase-js`) and add
+   them **before** `backend.js` in both `demo.html` and
+   `manifest.json` → `content_scripts.js`.
+4. Supabase Edge Functions are called from the page's origin, so they must
+   answer `OPTIONS` and send `Access-Control-Allow-Origin: *` (plus
+   `Access-Control-Allow-Headers: authorization, x-client-info, apikey, content-type`).
+
+To push it (from the repo folder):
+
+```sh
+git pull origin claude/loving-dijkstra-fjqpo9
+git add backend.js            # plus vendor/ or anything else you added
+git commit -m "Add real Supabase backend"
+git push origin claude/loving-dijkstra-fjqpo9
+```
 
 ### Methods
 
