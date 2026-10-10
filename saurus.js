@@ -945,13 +945,26 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // Backend HTML may only contain text and <mark>. Parsed by hand (no
   // innerHTML) so it is safe and works on Trusted Types pages.
   function decodeEntities(s) {
-    const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " " };
+    const named = {
+      amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0",
+      ldquo: "\u201c", rdquo: "\u201d", lsquo: "\u2018", rsquo: "\u2019", bdquo: "\u201e", sbquo: "\u201a",
+      laquo: "\u00ab", raquo: "\u00bb", lsaquo: "\u2039", rsaquo: "\u203a",
+      ndash: "\u2013", mdash: "\u2014", hellip: "\u2026", middot: "\u00b7", bull: "\u2022",
+      iexcl: "\u00a1", iquest: "\u00bf", deg: "\u00b0", euro: "\u20ac", pound: "\u00a3", copy: "\u00a9", reg: "\u00ae", trade: "\u2122",
+      szlig: "\u00df", aelig: "\u00e6", AElig: "\u00c6", oslash: "\u00f8", Oslash: "\u00d8", aring: "\u00e5", Aring: "\u00c5",
+      ccedil: "\u00e7", Ccedil: "\u00c7", ntilde: "\u00f1", Ntilde: "\u00d1", oelig: "\u0153",
+    };
+    // accented letters: &eacute; &Uuml; &agrave; &ocirc; ...
+    const ACC = { acute: "\u0301", grave: "\u0300", circ: "\u0302", uml: "\u0308", tilde: "\u0303" };
     return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
       if (e[0] === "#") {
         const cp = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
         try { return String.fromCodePoint(cp); } catch (_) { return m; }
       }
-      return named[e.toLowerCase()] ?? m;
+      if (named[e] !== undefined) return named[e];
+      if (named[e.toLowerCase()] !== undefined) return named[e.toLowerCase()];
+      const a = /^([a-zA-Z])(acute|grave|circ|uml|tilde)$/.exec(e);
+      return a ? (a[1] + ACC[a[2]]).normalize("NFC") : m;
     });
   }
   function htmlToFragment(html) {
