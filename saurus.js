@@ -556,7 +556,49 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     }
   }
 
+  // In the extension, record through the offscreen page (background.js) so
+  // Chrome asks for the microphone once for all sites, not once per site.
+  let micPort = null, micReady = false, micWait = null;
+  function inExtension() {
+    try { return !!(typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id && chrome.runtime.connect); } catch (_) { return false; }
+  }
+  function fromBase64(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length - (bin.length % 2));
+    for (let i = 0; i < bytes.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Int16Array(bytes.buffer);
+  }
+  function extMicStart() {
+    if (!micPort) {
+      micPort = chrome.runtime.connect({ name: "saurus-mic" });
+      micPort.onMessage.addListener((msg) => {
+        if (msg.type === "chunk") {
+          if (capturing && micReady) { sentAudio = true; call("sendAudio", fromBase64(msg.data)); }
+        } else if (msg.type === "started") {
+          micReady = true;
+          if (micWait) { micWait.resolve(); micWait = null; }
+        } else if (msg.type === "error") {
+          micReady = false;
+          const err = new Error(msg.message || "microphone unavailable");
+          err.name = msg.name || "Error";
+          if (micWait) { micWait.reject(err); micWait = null; }
+        }
+      });
+      micPort.onDisconnect.addListener(() => {
+        micPort = null; micReady = false;
+        if (micWait) { micWait.reject(new Error("Saurus was updated: refresh this page")); micWait = null; }
+      });
+    }
+    return new Promise((resolve, reject) => {
+      micWait = { resolve, reject };
+      micPort.postMessage({ type: "start" });
+    });
+  }
+
   function ensureMic() {
+    if (inExtension()) {
+      try { return extMicStart(); } catch (e) { return Promise.reject(new Error("Saurus was updated: refresh this page")); }
+    }
     if (micStream) return Promise.resolve();
     if (micPromise) return micPromise;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -587,6 +629,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
 
   function releaseMic() {
     capturing = false;
+    if (micPort) { try { micPort.postMessage({ type: "release" }); } catch (_) {} micReady = false; }
     if (micProc) { micProc.onaudioprocess = null; try { micProc.disconnect(); } catch (_) {} }
     if (micSource) { try { micSource.disconnect(); } catch (_) {} }
     if (micSink) { try { micSink.disconnect(); } catch (_) {} }
@@ -602,8 +645,8 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     ui.mic.classList.add("held");
     audioCtx();
     ensureMic().then(() => {
-      if (!talking) return; // released before the mic was ready
-      resampler = new Downsampler(ctx.sampleRate, 16000);
+      if (!talking) { if (micPort) micPort.postMessage({ type: "stop" }); return; } // released before the mic was ready
+      if (!micPort) resampler = new Downsampler(ctx.sampleRate, 16000);
       capturing = true;
     }, (err) => {
       talking = false;
@@ -611,7 +654,8 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       if (errText(err) === "cancelled") return;
       const denied = err && (err.name === "NotAllowedError" || err.name === "SecurityError");
       const missing = err && err.name === "NotFoundError";
-      problem(denied ? "I can't hear you: microphone access was denied."
+      problem(denied && micPort ? "I need the microphone once: allow it in the Saurus tab that just opened, then hold to talk again."
+        : denied ? "I can't hear you: microphone access was denied."
         : missing ? "I can't hear you: no microphone was found."
         : `I can't hear you: ${errText(err)}.`);
     });
@@ -621,6 +665,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     if (!talking) return;
     talking = false;
     capturing = false;
+    if (micPort) { try { micPort.postMessage({ type: "stop" }); } catch (_) {} }
     if (ui) ui.mic.classList.remove("held");
     if (sentAudio) { sentAudio = false; call("endOfSpeech"); }
   }

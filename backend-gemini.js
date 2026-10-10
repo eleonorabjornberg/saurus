@@ -30,10 +30,10 @@
 
   const LANG = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi" };
   const LEVEL = {
-    1: "total beginner (hatchling): mostly English with a few key words in the target language",
-    2: "beginner (juvenile): short, very simple sentences",
-    3: "intermediate (adult): simple but complete sentences",
-    4: "advanced (elder): natural, fluent speech",
+    1: "total beginner (hatchling): mostly the learner's own language, mixing in simple target-language words and short phrases, and repeating them",
+    2: "beginner (juvenile): only the target language, but very simple: short sentences, present tense, the most common words, spoken slowly",
+    3: "intermediate (adult): only the target language, fuller sentences with some subordinate clauses",
+    4: "advanced (elder): natural, fluent speech with idioms",
   };
 
   // ---------------------------------------------------------------------
@@ -221,7 +221,7 @@
       "If the learner asks to practise another language (French, German, Spanish, Swedish or Hindi), call switch_language first, then continue in that language. If they ask for easier or harder, follow them.",
       `The page (${page.url}):\n"""\n${page.text.slice(0, 8000)}\n"""`,
       resuming && history.length
-        ? `The connection just dropped and came back. Conversation so far (continue it; do not greet again):\n${history.join("\n")}`
+        ? `This is a continued session. Conversation so far (continue it; do not greet again unless asked):\n${history.join("\n")}`
         : "",
     ].join("\n");
   }
@@ -274,6 +274,27 @@
 
   // Sessions can end on their own (e.g. Supabase's Edge Function time limit,
   // or Gemini's session limit): reconnect quietly and carry on.
+  // Language or level changed: the session's standing instructions are only
+  // read when it opens, so reopen it with fresh ones (carrying the
+  // conversation over). Waits until Saurus finishes speaking.
+  let pendingRefresh = null;
+  function refreshSession(greet) {
+    if (!running) return;
+    pendingRefresh = { greet: greet || (pendingRefresh && pendingRefresh.greet) || null };
+    if (live && !speaking && !talking) doRefresh();
+  }
+  function doRefresh() {
+    const p = pendingRefresh;
+    pendingRefresh = null;
+    if (!p || !running) return;
+    resuming = true;
+    setState("thinking");
+    connect().then(() => {
+      resuming = false;
+      if (p.greet) say(p.greet); else setState("idle");
+    }, (e) => { resuming = false; if (running) reconnect(e.message); });
+  }
+
   function reconnect(why) {
     if (reconnects >= 3) { setState("idle"); emit("error", { message: why }); return; }
     reconnects++;
@@ -337,6 +358,7 @@
         finishUser();
         finishSaurus(false);
         if (!talking) setState("idle");
+        if (pendingRefresh && !talking) doRefresh();
       }
     }
     if (msg.toolCall && msg.toolCall.functionCalls) {
@@ -361,6 +383,7 @@
         if (!code) return "unknown language; choose fr, de, es, sv or hi";
         if (code === lang) return `already practising ${LANG[code]}`;
         const info = await switchLanguage(code, true);
+        if (info) refreshSession(null); // after this turn, continue under the new language's instructions
         return info ? `switched to ${LANG[code]}. ${info} From now on speak ${LANG[code]} at that level.` : "not switched";
       }
       case "offer_drill": emit("drill_offer", { topic: String(args.topic || "this page") }); return "offered; wait for the learner's answer";
@@ -391,6 +414,7 @@
     const next = Math.max(1, Math.min(4, levels[lang] + delta));
     if (next === levels[lang]) return `already at level ${next}`;
     levels[lang] = next;
+    refreshSession(null);
     saveLevel(lang, next);
     emit("level", { language: lang, level: next });
     if (delta > 0) emit("celebrate");
@@ -400,11 +424,13 @@
   // ---------------------------------------------------------------------
   // Page translation (Gemini Flash, structured output)
   // ---------------------------------------------------------------------
+  // Level 1 mixes the page's language with the target language; levels 2-4
+  // are fully in the target language, from very simple to natural.
   const GUIDE = {
-    1: "Keep the text in English, but replace one or two important words per block (key nouns or verbs) with the target language. Wrap each replaced word in <mark></mark>.",
-    2: "Keep the sentence structure, but replace about a third of the text with the target language, choosing whole meaningful phrases. Wrap each target-language phrase in <mark></mark>.",
-    3: "Translate the whole block into simple target-language sentences with common words. Wrap one or two words a learner may not know in <mark></mark>.",
-    4: "Translate the whole block into natural, idiomatic target language. Wrap one or two advanced or idiomatic words in <mark></mark>.",
+    1: "Keep the block in its original language, but replace the key words and a few short, useful phrases (about a quarter of the text) with the target language, so the meaning stays clear from context. Wrap each target-language word or phrase in <mark></mark>.",
+    2: "Rewrite the whole block in the target language for a beginner (CEFR A1-A2): very short sentences, present tense, only common words. Keep the key facts, drop details if needed. Wrap the one or two most important words that are likely new in <mark></mark>.",
+    3: "Translate the whole block into clear target language (CEFR B1): complete sentences, some subordinate clauses, common vocabulary. Wrap one or two harder words in <mark></mark>.",
+    4: "Translate the whole block into natural, idiomatic target language, as a native writer would. Wrap one or two advanced or idiomatic words in <mark></mark>.",
   };
 
   // Translation speed: newer Gemini models "think" by default, which adds
@@ -414,7 +440,7 @@
   let thinkIdx = 0;
   // Finished translations, so revisiting a level or language is instant.
   const cache = new Map();
-  const cacheKey = (language, level, text) => `${language}|${level}|${text}`;
+  const cacheKey = (language, level, text) => `v3|${language}|${level}|${text}`;
 
   async function translateBatch(blocks, language, level) {
     const out = [], todo = [];
@@ -553,7 +579,7 @@
 
     async setLanguage(code) {
       const info = await switchLanguage(code, false);
-      if (info) say(`(Switch now: from here on speak ${LANG[code]} with me. ${info} Greet me in ${LANG[code]} and continue our conversation about the page.)`);
+      if (info) refreshSession(`(We just switched to ${LANG[code]}. Greet me in ${LANG[code]} and continue our conversation about the page.)`);
     },
 
     stop() {
@@ -569,14 +595,8 @@
     },
 
     demo: {
-      levelUp() {
-        const r = changeLevel(+1);
-        if (live) say(`(My ${LANG[lang]} ${r}. Adapt to it from now on.)`, false);
-      },
-      levelDown() {
-        const r = changeLevel(-1);
-        if (live) say(`(My ${LANG[lang]} ${r}. Adapt to it from now on.)`, false);
-      },
+      levelUp() { changeLevel(+1); },   // the session reopens at the new level
+      levelDown() { changeLevel(-1); },
       drillOffer() {
         const due = struggles[lang].slice(0, 3).map((x) => x.word);
         const topic = due.length ? due.join(", ") : "the words on this page";
