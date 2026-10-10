@@ -15,7 +15,7 @@
   // ---------------------------------------------------------------------
   const LANG_NAME = { fr: "French", de: "German", es: "Spanish" };
   const LEVEL_NAME = { 1: "hatchling", 2: "juvenile", 3: "adult", 4: "elder" };
-  const LEVEL_SIZE = { 1: 64, 2: 76, 3: 88, 4: 96 }; // px: desktop-pet sized, grows with level
+  const LEVEL_SIZE = { 1: 80, 2: 92, 3: 104, 4: 112 }; // px: desktop-pet sized, grows with level
   const CORNER_KEY = "saurus.corner";
   const FONT_URL = "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=DM+Mono:wght@400;500&display=swap";
   const BLOCK_SEL = "p, h1, h2, h3, h4, h5, h6, li";
@@ -77,8 +77,8 @@
     </svg>`;
   }
 
-  const ICON_MUTE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="4,9 8,9 13,5 13,19 8,15 4,15" fill="none"/><line x1="17" y1="9" x2="21" y2="15"/><line x1="21" y1="9" x2="17" y2="15"/></svg>`;
-  const ICON_MIC = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="none"/><path d="M5 11a7 7 0 0 0 14 0" fill="none"/><line x1="12" y1="18" x2="12" y2="21"/></svg>`;
+  const ICON_MUTE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6"/><path d="M17.5 3.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`;
+  const ICON_MIC = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="10" x2="4" y2="14"/><line x1="8" y1="7" x2="8" y2="17"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="16" y1="7" x2="16" y2="17"/><line x1="20" y1="10" x2="20" y2="14"/></svg>`;
   const PUFF = `<i style="--x:0%;--y:0%"></i><i style="--x:-55%;--y:-35%"></i><i style="--x:55%;--y:-35%"></i><i style="--x:-60%;--y:30%"></i><i style="--x:60%;--y:30%"></i><i style="--x:0%;--y:-60%"></i><i style="--x:0%;--y:55%"></i>`;
 
   // ---------------------------------------------------------------------
@@ -87,10 +87,12 @@
   const TOKENS_LIGHT = `--bg:#EEF3EC; --surface:#FFFFFF; --fg:#14251C; --muted:#56695D; --line:#C9D6CC;
     --accent:#1F7A4D; --accent-ink:#FFFFFF; --belly:#BFE3CB; --mark:#FFDD55; --mark-ink:#2A2200;
     --dino:#8CC8F2; --dino-line:#2D5E9E; --dino-spot:#5D9FDB;
+    --glass:rgba(255,255,255,.74); --glass-u:rgba(240,246,250,.82); --glass-edge:rgba(255,255,255,.7); --glass-shadow:rgba(20,37,60,.22);
     --beret:#C8322B; --bread:#D9A24A; --shell:#FFFDF6; --puff:#FFFFFF; --leder:#7A4A21; --hat:#2F5D3A; --dress:#D0312D; --fan:#F2C94C;`;
   const TOKENS_DARK = `--bg:#0F1A14; --surface:#18271F; --fg:#E6EFE8; --muted:#9DB3A5; --line:#2C4035;
     --accent:#5FD08F; --accent-ink:#06170D; --belly:#1F5A3A; --mark:#E8C63A; --mark-ink:#1C1700;
     --dino:#8CC8F2; --dino-line:#2D5E9E; --dino-spot:#5D9FDB;
+    --glass:rgba(30,36,44,.72); --glass-u:rgba(40,48,58,.8); --glass-edge:rgba(255,255,255,.12); --glass-shadow:rgba(0,0,0,.45);
     --beret:#E2554D; --bread:#E0B060; --shell:#F3F0E4; --puff:#DCE8DF; --leder:#A66A35; --hat:#3F7A4E; --dress:#E2554D; --fan:#F2C94C;`;
 
   const CSS = `
@@ -105,57 +107,64 @@
 button{font:inherit;color:inherit;cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
-.saurus{position:fixed;z-index:2147483647;width:min(336px,calc(100vw - 32px));display:flex;flex-direction:column;gap:8px;
-  align-items:flex-end;font-family:var(--body);font-size:16px;line-height:1.5;color:var(--fg);pointer-events:none;
+.saurus{position:fixed;z-index:2147483647;width:min(320px,calc(100vw - 32px));display:flex;flex-direction:column;gap:10px;
+  align-items:center;font-family:var(--body);font-size:15px;line-height:1.45;color:var(--fg);pointer-events:none;
   animation:arrive .35s ease-out both}
 .saurus > *{pointer-events:auto}
 .saurus[data-corner="br"]{right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px))}
-.saurus[data-corner="bl"]{left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));align-items:flex-start}
-.saurus[data-corner="tr"]{right:16px;top:16px;flex-direction:column-reverse}
-.saurus[data-corner="tl"]{left:16px;top:16px;flex-direction:column-reverse;align-items:flex-start}
+.saurus[data-corner="bl"]{left:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+.saurus[data-corner="tr"]{right:16px;top:16px}
+.saurus[data-corner="tl"]{left:16px;top:16px}
 .saurus.dragging{animation:none;transition:none}
 @keyframes arrive{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
 
-/* bubbles: a scrollable log sized to show only the latest two */
-.bubbles{display:grid;gap:6px;width:100%}
-.log{position:relative;display:grid;gap:6px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;
-  scroll-behavior:smooth;transition:height .2s ease-out;padding:1px}
-.bubble{border-radius:16px;padding:10px 14px;font-size:16px;line-height:1.35;border:1px solid var(--line);
-  background:var(--surface);color:var(--fg);max-width:92%;cursor:pointer;overflow-wrap:anywhere;margin:0}
-.bubble small{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
-.bubble .text{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
+/* frosted glass, like a desktop pet's controls and cards */
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);
+  border:1px solid var(--glass-edge);box-shadow:0 10px 30px -8px var(--glass-shadow),0 1px 2px var(--glass-shadow)}
+
+/* pet, then the control pill, then the cards */
+.dock{display:flex;flex-direction:column;align-items:center;gap:8px}
+.pill{display:flex;align-items:center;gap:2px;padding:4px;border-radius:999px}
+.pill .sep{width:1px;height:18px;background:var(--line);margin:0 2px}
+.ctl{width:40px;height:32px;border-radius:999px;border:0;background:transparent;display:grid;place-items:center;color:var(--fg);
+  padding:0;touch-action:none;-webkit-user-select:none;user-select:none;transition:background .15s,color .15s,transform .15s}
+.ctl:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
+.ctl svg{width:20px;height:20px}
+.mute[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.ctl.held{background:var(--accent);color:var(--accent-ink);transform:scale(1.06)}
+.ctl.held svg{animation:wave .6s ease-in-out infinite alternate}
+@keyframes wave{from{transform:scaleY(.8)}to{transform:scaleY(1.15)}}
+
+/* cards: a scrollable log sized to show only the latest two */
+.bubbles{display:grid;gap:8px;width:100%}
+.log{position:relative;display:grid;gap:8px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;
+  scroll-behavior:smooth;transition:height .2s ease-out;padding:2px 2px 12px;margin:-2px -2px -12px;scroll-padding-top:2px}
+.log::-webkit-scrollbar{display:none}
+.bubble{border-radius:22px;padding:11px 16px 12px;width:100%;cursor:pointer;overflow-wrap:anywhere;margin:0;color:var(--fg)}
+.bubble small{display:block;font-weight:700;font-size:14px;line-height:1.3;color:var(--fg);margin-bottom:1px}
+.bubble .text{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;color:var(--muted)}
+.bubble.s .text{color:var(--fg)}
 .bubble.expanded .text{-webkit-line-clamp:unset;display:block}
-.bubble.s{justify-self:end;border-bottom-right-radius:4px;border-color:var(--accent)}
-.bubble.u{justify-self:start;border-bottom-left-radius:4px}
-.saurus[data-corner$="l"] .bubble.s{justify-self:start;border-bottom-right-radius:16px;border-bottom-left-radius:4px}
-.saurus[data-corner$="l"] .bubble.u{justify-self:end;border-bottom-left-radius:16px;border-bottom-right-radius:4px}
-.bubble.err{border-color:var(--beret);border-width:2px}
+.bubble.u{background:var(--glass-u)}
+.bubble.err{border-color:var(--beret)}
 .bubble.err small{color:var(--beret)}
-.caret::after{content:"";display:inline-block;width:.5em;height:1em;margin-left:.15em;background:var(--accent);vertical-align:-.15em;animation:blink 1s steps(2) infinite}
+.caret::after{content:"";display:inline-block;width:.5em;height:1em;margin-left:.15em;background:var(--accent);vertical-align:-.15em;border-radius:2px;animation:blink 1s steps(2) infinite}
 @keyframes blink{50%{opacity:0}}
 .choices{display:flex;gap:6px;margin-top:8px}
-.choices button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 13px;font-size:14px}
+.choices button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:4px 14px;font-size:14px}
 .choices button.yes{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
 .choices button:disabled{opacity:.5;cursor:default}
-.typebox{cursor:text;width:92%}
-.typebox input{all:unset;display:block;width:100%;font-family:var(--body);font-size:16px;line-height:1.35;color:var(--fg)}
+.typebox{cursor:text}
+.typebox input{all:unset;display:block;width:100%;font-family:var(--body);font-size:15px;line-height:1.45;color:var(--fg)}
 .typebox input::placeholder{color:var(--muted)}
 
-/* dock: stage label, mute, mic, dino */
-.dock{display:flex;align-items:flex-end;gap:8px}
-.saurus[data-corner$="l"] .dock{flex-direction:row-reverse}
-.stage{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);align-self:center;
-  background:color-mix(in srgb,var(--surface) 80%,transparent);border-radius:999px;padding:2px 6px}
-.ctl{width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;
-  padding:0;touch-action:none;-webkit-user-select:none;user-select:none}
-.ctl svg{width:20px;height:20px}
-.ctl[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.ctl.held{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 35%,transparent);transform:scale(1.08)}
-
-/* avatar */
-.dino-wrap{position:relative;display:inline-flex;flex:none;width:var(--size,68px);height:var(--size,68px);
-  transition:width .3s ease-out,height .3s ease-out;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
+/* avatar: floats freely, no frame */
+.dino-wrap{position:relative;display:inline-flex;flex:none;width:var(--size,96px);height:var(--size,96px);
+  transition:width .3s ease-out,height .3s ease-out;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;
+  filter:drop-shadow(0 6px 8px var(--glass-shadow))}
 .dragging .dino-wrap{cursor:grabbing}
+.float{display:block;width:100%;height:100%;animation:float 4.2s ease-in-out infinite}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 .hop,.mover,.art{width:100%;height:100%;display:block;transform-origin:50% 100%}
 .art svg,.art img{width:100%;height:100%;display:block}
 .d-body{fill:var(--dino);stroke:var(--dino-line);stroke-width:3;stroke-linejoin:round}
@@ -204,7 +213,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 @keyframes pop{0%{transform:scale(1)}30%{transform:scale(.7)}62%{transform:scale(1.12)}100%{transform:scale(1)}}
 
 @media (prefers-reduced-motion: reduce){
-  .saurus,.caret::after,.puffing .puff i,.puffing .art,.mover,.hop,.celebrating .hop,.d-mouth{animation:none !important}
+  .saurus,.caret::after,.puffing .puff i,.puffing .art,.mover,.hop,.celebrating .hop,.d-mouth,.float,.ctl.held svg{animation:none !important}
   [data-state="listening"] .mover{transform:none}
   .log{scroll-behavior:auto;transition:none}
   .dino-wrap{transition:none}
@@ -274,25 +283,27 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     shadow = host.attachShadow({ mode: "open" });
     setHTML(shadow, `<style>${CSS}</style>
       <aside class="saurus" data-corner="br" data-state="idle" aria-label="Saurus" hidden>
-        <div class="bubbles">
-          <div class="log" role="log" aria-live="polite"></div>
-          <form class="bubble u typebox" hidden><small>You, typing</small><input type="text" enterkeyhint="send" autocomplete="off" placeholder="Type to Saurus, press Enter" aria-label="Message to Saurus"></form>
-        </div>
         <div class="dock">
-          <span class="stage">Waking up…</span>
-          <button class="ctl mute" type="button" aria-pressed="false" aria-label="Mute: switch to silent chat" title="Mute">${ICON_MUTE}</button>
-          <button class="ctl mic" type="button" aria-pressed="true" aria-label="Hold to talk" title="Hold to talk (or hold Space)">${ICON_MIC}</button>
           <span class="dino-wrap" role="img" aria-label="Saurus">
             <span class="puff" aria-hidden="true">${PUFF}</span>
-            <span class="hop"><span class="mover"><span class="art"></span></span></span>
+            <span class="float"><span class="hop"><span class="mover"><span class="art"></span></span></span></span>
           </span>
+          <div class="pill glass" role="toolbar" aria-label="Saurus controls">
+            <button class="ctl mute" type="button" aria-pressed="false" aria-label="Mute: switch to typing" title="Mute: type instead">${ICON_MUTE}</button>
+            <span class="sep" aria-hidden="true"></span>
+            <button class="ctl mic" type="button" aria-pressed="true" aria-label="Hold to talk" title="Hold to talk (or hold Space)">${ICON_MIC}</button>
+          </div>
+        </div>
+        <div class="bubbles">
+          <div class="log" role="log" aria-live="polite"></div>
+          <form class="bubble u glass typebox" hidden><small>You</small><input type="text" enterkeyhint="send" autocomplete="off" placeholder="Type to Saurus, press Enter" aria-label="Message to Saurus"></form>
         </div>
       </aside>`);
     (document.body || document.documentElement).appendChild(host);
     const $ = (s) => shadow.querySelector(s);
     ui = {
       root: $(".saurus"), log: $(".log"), typebox: $(".typebox"), input: $(".typebox input"),
-      stage: $(".stage"), mute: $(".mute"), mic: $(".mic"), wrap: $(".dino-wrap"),
+      mute: $(".mute"), mic: $(".mic"), wrap: $(".dino-wrap"),
       mover: $(".mover"), art: $(".art"),
     };
     ui.root.dataset.corner = loadCorner();
@@ -347,7 +358,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // ---------------------------------------------------------------------
   function addBubble(who, text, opts = {}) {
     const el = document.createElement("div");
-    el.className = `bubble ${who}` + (opts.error ? " err" : "");
+    el.className = `bubble glass ${who}` + (opts.error ? " err" : "");
     const label = document.createElement("small");
     label.textContent = opts.label || (who === "s" ? (opts.error ? "Saurus · problem" : "Saurus") : "You, live transcript");
     const t = document.createElement("span");
@@ -387,7 +398,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     ui.log.hidden = false;
     const first = items[Math.max(0, items.length - n)];
     const last = items[items.length - 1];
-    const h = last.offsetTop + last.offsetHeight - first.offsetTop + 2;
+    const h = last.offsetTop + last.offsetHeight - first.offsetTop + 16; // room for the card shadow
     ui.log.style.height = Math.min(h, window.innerHeight * 0.6) + "px";
     ui.log.scrollTop = ui.log.scrollHeight;
   }
@@ -612,7 +623,7 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
     ui.wrap.style.setProperty("--size", LEVEL_SIZE[lv] + "px");
     setHTML(ui.art, avatarSVG(l, lv));
     const who = l ? `${LANG_NAME[l]} · ${LEVEL_NAME[lv]}` : "Waking up…";
-    ui.stage.textContent = who;
+    ui.wrap.title = who;
     ui.wrap.setAttribute("aria-label", `Saurus, ${who}`);
     if (!l) return;
     const url = assetUrl(`assets/saurus-${l}-${lv}.png`);
