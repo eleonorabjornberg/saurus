@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Saurus",
+  "version": "0.1.0",
+  "description": "A patient language tutor that lives in your browser. Press Alt+S to call Saurus.",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["backend.js", "backend-mock.js", "saurus.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*.png"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

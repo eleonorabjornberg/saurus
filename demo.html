@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Ledger: New Rules for AI at Work</title>
+<style>
+  :root{--bg:#fbfaf7;--fg:#1d1d1b;--muted:#6b6a64;--line:#e4e1d8;--link:#1f5fa8}
+  @media (prefers-color-scheme: dark){:root{--bg:#141412;--fg:#ecebe6;--muted:#a3a29b;--line:#2e2d29;--link:#8cb8f0}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.65 Georgia,"Times New Roman",serif}
+  header.site{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line);font-family:system-ui,sans-serif}
+  .logo{font-weight:800;letter-spacing:.02em}
+  nav ul{display:flex;flex-wrap:wrap;gap:4px 16px;list-style:none;margin:0;padding:0;font-size:15px}
+  nav a,aside a{color:var(--link);text-decoration:none}
+  .wrap{max-width:44rem;margin:0 auto;padding:24px 16px 160px}
+  .kicker{font:600 13px/1 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:24px 0 8px}
+  h1{font-size:clamp(30px,5vw,44px);line-height:1.15;margin:0 0 12px}
+  .byline{font:15px/1.4 system-ui,sans-serif;color:var(--muted)}
+  h2{font-size:24px;margin:36px 0 8px}
+  blockquote{margin:24px 0;padding-left:16px;border-left:3px solid var(--line);font-style:italic}
+  aside{margin-top:40px;padding:16px;border:1px solid var(--line);border-radius:8px;font-family:system-ui,sans-serif;font-size:15px}
+  aside h3{margin:0 0 8px;font-size:15px}
+  aside ul{margin:0;padding-left:18px}
+  form{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  input{flex:1 1 12rem;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:transparent;color:inherit}
+  button{font:inherit;padding:8px 14px;border-radius:6px;border:0;background:var(--fg);color:var(--bg);cursor:pointer}
+  footer{border-top:1px solid var(--line);padding:16px;text-align:center;font:14px/1.5 system-ui,sans-serif;color:var(--muted)}
+  kbd{font:13px ui-monospace,Menlo,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 5px}
+</style>
+</head>
+<body>
+<header class="site">
+  <span class="logo">The Ledger</span>
+  <nav aria-label="Sections">
+    <ul>
+      <li><a href="#">Markets</a></li>
+      <li><a href="#">Law</a></li>
+      <li><a href="#">Technology</a></li>
+      <li><a href="#">Opinion</a></li>
+    </ul>
+  </nav>
+</header>
+
+<main class="wrap">
+  <article>
+    <p class="kicker">Regulation</p>
+    <h1>New rules for AI at work: what changes this year</h1>
+    <p class="byline">By the Ledger law team · 6 minute read</p>
+
+    <p>For years, companies used AI with very few rules. That time is over. A new law now asks every company that uses AI in important decisions to explain how the machine reached its decision, and to keep a human in the loop.</p>
+
+    <p>The government says the goal is simple: people should know when a machine decides something about their job, their loan or their money. Banks and insurance companies are the first in line, because their decisions change lives.</p>
+
+    <h2>Who must follow the new rules?</h2>
+    <p>The law sorts AI systems by risk. A chatbot that answers questions about opening hours is low risk. A system that decides who gets a loan, a job or a flat is high risk, and high risk means more work.</p>
+    <ul>
+      <li>Banks must keep a report for every automated loan decision.</li>
+      <li>Companies must tell customers when a machine makes the first decision.</li>
+      <li>A human must be able to check and change any important decision.</li>
+      <li>Small companies get one more year before the rules apply.</li>
+    </ul>
+
+    <h2>What does it cost?</h2>
+    <p>The price is not small. Experts say a big bank may need a new team of ten people just to write reports. Fines for breaking the rules can reach six percent of a company's yearly money from customers.</p>
+
+    <blockquote><p>“A decision about your future should always have a reason a human can read,” said the judge who led the court review last week.</p></blockquote>
+
+    <h2>What happens next?</h2>
+    <p>Other countries are watching. If the rules work, the same ideas may spread around the world in the next few years. If they do not, companies will say the law was too slow and too expensive. The first report on the new law is due next summer.</p>
+  </article>
+
+  <aside aria-label="More from The Ledger">
+    <h3>Related</h3>
+    <ul>
+      <li><a href="#">Five questions to ask your bank about AI</a></li>
+      <li><a href="#">The court case that started it all</a></li>
+    </ul>
+    <form onsubmit="event.preventDefault(); this.querySelector('button').textContent = 'Thanks!';">
+      <input type="email" placeholder="you@example.com" aria-label="Email for the newsletter">
+      <button type="submit">Get the newsletter</button>
+    </form>
+  </aside>
+</main>
+
+<footer>Saurus demo page. Press <kbd>Alt</kbd>+<kbd>S</kbd> to call Saurus.</footer>
+
+<script src="backend.js"></script>
+<script src="backend-mock.js"></script>
+<script src="saurus.js"></script>
+</body>
+</html>
