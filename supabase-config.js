@@ -17,5 +17,5 @@ window.SAURUS_SUPABASE = {
   // true once the "gemini" Edge Function is deployed with the GEMINI_API_KEY
   // secret: Saurus then uses Gemini through Supabase and needs no local key.
   // (A key in config.js still takes priority.)
-  gemini: false,
+  gemini: true,
 };
