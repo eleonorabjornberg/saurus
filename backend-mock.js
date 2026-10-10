@@ -130,7 +130,7 @@
   // ---------------------------------------------------------------------
   const handlers = {};
   let timers = [];
-  let lang = "fr";
+  let lang = (window.SAURUS_CONFIG && window.SAURUS_CONFIG.language) || "de";
   const levels = { fr: 1, de: 1, es: 1 };
   let running = false;
   let state = "idle";

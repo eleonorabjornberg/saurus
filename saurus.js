@@ -7,8 +7,12 @@
  */
 (function () {
   "use strict";
-  if (window.__saurusLoaded) return;
+  // One Saurus per page, even when both the page and the extension load it
+  // (they run in separate JS worlds, so the flag lives on the shared DOM).
+  const root = document.documentElement;
+  if (window.__saurusLoaded || root.hasAttribute("data-saurus-loaded")) return;
   window.__saurusLoaded = true;
+  root.setAttribute("data-saurus-loaded", "");
 
   // ---------------------------------------------------------------------
   // Constants
