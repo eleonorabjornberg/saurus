@@ -23,5 +23,6 @@
       return state;
     },
     memory(op, args) { return this.request("memory", { op, args, expectedUserId: userId }); },
+    ticket() { return this.request("ticket", { expectedUserId: userId }); },
   };
 })();

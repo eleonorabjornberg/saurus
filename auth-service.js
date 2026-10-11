@@ -101,6 +101,16 @@
         if (payload.op !== "profile" && !["fr", "de", "es", "sv", "hi"].includes(payload.args?.language)) throw new Error("Choose a supported language.");
         return memory(payload.op, payload.args || {});
       }
+      if (type === "ticket") {
+        // A ten-minute pass for the Gemini function. It identifies the user
+        // for the free-tier limits without the session token leaving the worker.
+        const current = await session();
+        if (!current) throw new Error("Please sign in to continue.");
+        if (payload.expectedUserId !== undefined && current.user.id !== payload.expectedUserId) throw new Error("Your account changed. Open Saurus again to continue.");
+        const { data, error } = await client.rpc("saurus_gemini_ticket");
+        if (error || !data?.ticket) throw new Error("Saurus couldn’t check your free allowance. Check your connection and that the usage migration is applied.");
+        return data;
+      }
       throw new Error("Unsupported account operation.");
     }
     return { handle: (type, payload) => serial(() => handle(type, payload)), refresh: () => serial(session), dispose: () => client.auth.stopAutoRefresh() };
