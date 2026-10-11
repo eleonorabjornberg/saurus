@@ -18,4 +18,11 @@ globalThis.SAURUS_SUPABASE = {
   // secret: Saurus then uses Gemini through Supabase and needs no local key.
   // (A key in config.js still takes priority.)
   gemini: true,
+  // Saurus's public site (GitHub Pages): password-reset links land on its
+  // reset.html, and the CAPTCHA (captcha.html) is served from it.
+  site: "https://eleonorabjornberg.github.io/saurus/",
+  // Cloudflare Turnstile site key (public). Empty: no CAPTCHA. Set it only
+  // together with Supabase > Authentication > Attack Protection > CAPTCHA,
+  // since Supabase then refuses sign-up, log-in and reset without one.
+  captchaSiteKey: "",
 };

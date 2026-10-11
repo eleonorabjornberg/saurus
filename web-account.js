@@ -41,7 +41,9 @@
       }
     },
     async remove(key) {
-      try { if (ownSite) localStorage.removeItem(PREFIX + key); else memoryStore.delete(key); } catch (_) {}
+      for (const k of [].concat(key)) {
+        try { if (ownSite) localStorage.removeItem(PREFIX + k); else memoryStore.delete(k); } catch (_) {}
+      }
     },
   };
 
@@ -130,6 +132,9 @@
     .lang span{margin-right:7px}
     .lang[aria-pressed=true]{border-color:#437750;background:#e5efda;font-weight:650}
     .stage{font-size:12px;color:#69766a;background:#ffffff88;border-radius:12px;padding:10px 12px;margin:0 0 14px;line-height:1.5}
+    .captcha{display:block;width:100%;height:72px;border:0;margin:0 0 12px;background:transparent}
+    .danger{border-color:#8f3a2e;background:linear-gradient(#b1503f,#8f3a2e)}
+    .quiet{color:#8a6f68;font-size:12px;margin-top:0}
     .note{min-height:1em;font-size:12px;color:#a2473a;margin:10px 0 0;text-align:center}
     @media (max-width:520px){.back{align-items:flex-end;padding:0}.card{max-width:none;border-radius:22px 22px 0 0;max-height:92vh;padding-bottom:max(18px,env(safe-area-inset-bottom))}}
   `;
@@ -155,8 +160,10 @@
     open();
     note.textContent = "";
     body.replaceChildren(...kids);
+    // Focus now, not on a timer: a late focus could pull an autofill or a fast
+    // typist out of the field they're already in.
     const first = body.querySelector("input, .primary");
-    if (first) setTimeout(() => first.focus(), 30);
+    if (first) first.focus({ preventScroll: true });
   }
   const pet = (lang) => {
     const img = h("img", { class: "pet", alt: "", src: base + (lang ? `assets/saurus-${lang}-1.png` : "assets/saurus-plain.png") });
@@ -166,6 +173,22 @@
   async function busy(button, fn) {
     button.disabled = true; note.textContent = "";
     try { await fn(); } catch (err) { note.textContent = String((err && err.message) || err); } finally { button.disabled = false; }
+  }
+  // CAPTCHA (Cloudflare Turnstile) in a frame from Saurus's site, only when a site key is set.
+  function captcha() {
+    if (!cfg.captchaSiteKey) return null;
+    const src = new URL("captcha.html", base);
+    src.search = new URLSearchParams({ k: cfg.captchaSiteKey, o: location.origin }).toString();
+    const frame = h("iframe", { class: "captcha", title: "Check that you’re not a robot", src: src.href });
+    const box = { el: frame, token: null, reset() { box.token = null; frame.src = src.href; } }; // tokens work once
+    window.addEventListener("message", (e) => {
+      if (e.source === frame.contentWindow && e.data && "saurusCaptcha" in e.data) box.token = e.data.saurusCaptcha || null;
+    });
+    return box;
+  }
+  function needsCaptcha(cap) {
+    if (cap && !cap.token) { note.textContent = "Please complete the check that you’re not a robot first."; return true; }
+    return false;
   }
   // Saurus opens itself with Alt+S; on a page that also works as a synthetic key.
   const summon = () => window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "s", altKey: true, bubbles: true }));
@@ -182,13 +205,16 @@
     const password = h("input", { id: "password", type: "password", autocomplete: signup ? "new-password" : "current-password", required: "" });
     const confirm = signup ? h("input", { id: "confirm", type: "password", autocomplete: "new-password", required: "" }) : null;
     const submit = h("button", { class: "primary", type: "submit" }, signup ? "Create account" : "Log in");
+    const cap = captcha();
     const f = h("form", { novalidate: "", onsubmit: (e) => {
       e.preventDefault();
       if (!email.validity.valid || !email.value.trim()) { note.textContent = "Please enter a valid email address."; return email.focus(); }
       if (password.value.length < (signup ? 8 : 1)) { note.textContent = signup ? "Please use at least 8 characters." : "Please enter your password."; return password.focus(); }
       if (signup && confirm.value !== password.value) { note.textContent = "Your passwords don’t match yet."; return confirm.focus(); }
+      if (needsCaptcha(cap)) return;
       busy(submit, async () => {
-        const state = await account.request(mode, { email: email.value.trim(), password: password.value });
+        const state = await account.request(mode, { email: email.value.trim(), password: password.value, captchaToken: cap && cap.token })
+          .finally(() => cap && cap.reset());
         password.value = ""; if (confirm) confirm.value = "";
         if (state.verification) return checkEmail();
         if (state.user && state.profile && state.profile.onboarded) { close(); summon(); } else panel(state);
@@ -197,13 +223,69 @@
       h("label", { for: "email" }, "Email address"), email,
       h("label", { for: "password" }, "Password"), password,
       signup ? [h("label", { for: "confirm" }, "Confirm password"), confirm] : null,
-      submit);
+      cap && cap.el, submit);
     screen(pet(),
       h("div", { class: "eyebrow" }, signup ? "Your next chapter" : "Good to see you again"),
       h("h1", {}, signup ? "Create your account." : "Log in to Saurus."),
       h("p", {}, signup ? "Free every day. Your companion remembers your progress on every device." : "Your dinosaur—and your progress—are waiting."),
       f,
+      signup ? null : h("button", { class: "link", type: "button", onclick: () => forgot(email.value) }, "Forgot password?"),
       h("button", { class: "link", type: "button", onclick: () => form(signup ? "signin" : "signup") }, signup ? "Already have an account? Log in" : "New here? Create an account"));
+  }
+
+  // "Forgot password?": Supabase emails a link to reset.html on Saurus's site.
+  function forgot(prefill) {
+    const email = h("input", { id: "email", type: "email", autocomplete: "email", placeholder: "you@example.com", required: "" });
+    email.value = prefill || "";
+    const submit = h("button", { class: "primary", type: "submit" }, "Send reset link");
+    const cap = captcha();
+    const f = h("form", { novalidate: "", onsubmit: (e) => {
+      e.preventDefault();
+      if (!email.validity.valid || !email.value.trim()) { note.textContent = "Please enter a valid email address."; return email.focus(); }
+      if (needsCaptcha(cap)) return;
+      busy(submit, async () => {
+        await account.request("reset", { email: email.value.trim(), captchaToken: cap && cap.token }).finally(() => cap && cap.reset());
+        screen(pet(),
+          h("div", { class: "eyebrow" }, "One little step"),
+          h("h1", {}, "Check your email."),
+          h("p", {}, "If an account uses this address, a link to choose a new password is on its way. It works once, for a short while."),
+          h("button", { class: "primary", type: "button", onclick: () => form("signin") }, "Back to log in"));
+      });
+    } }, h("label", { for: "email" }, "Email address"), email, cap && cap.el, submit);
+    screen(pet(),
+      h("div", { class: "eyebrow" }, "It happens to everyone"),
+      h("h1", {}, "Forgot your password?"),
+      h("p", {}, "Enter your email and we’ll send you a link to choose a new one."),
+      f,
+      h("button", { class: "link", type: "button", onclick: () => form("signin") }, "Back to log in"));
+  }
+
+  // Delete the account and everything Saurus keeps for it, after the password again.
+  function deleteAccount(state) {
+    const password = h("input", { id: "password", type: "password", autocomplete: "current-password", required: "" });
+    const submit = h("button", { class: "primary danger", type: "submit" }, "Delete my account");
+    const cap = captcha();
+    const f = h("form", { novalidate: "", onsubmit: (e) => {
+      e.preventDefault();
+      if (!password.value) { note.textContent = "Please enter your password."; return password.focus(); }
+      if (needsCaptcha(cap)) return;
+      busy(submit, async () => {
+        await account.request("delete", { password: password.value, captchaToken: cap && cap.token }).finally(() => cap && cap.reset());
+        password.value = "";
+        account.current = null; userId = null;
+        screen(pet(),
+          h("div", { class: "eyebrow" }, "All cleared"),
+          h("h1", {}, "Your account is deleted."),
+          h("p", {}, "Everything Saurus kept for it is gone. You’re welcome back any time."),
+          h("button", { class: "primary", type: "button", onclick: () => { close(); location.reload(); } }, "Done"));
+      });
+    } }, h("label", { for: "password" }, "Your password"), password, cap && cap.el, submit);
+    screen(pet(),
+      h("div", { class: "eyebrow" }, "Delete account"),
+      h("h1", {}, "Delete your account?"),
+      h("p", {}, "This removes your account and everything Saurus remembers for it: your levels, words, answers and conversation summaries, in every language. It can’t be undone."),
+      f,
+      h("button", { class: "link", type: "button", onclick: () => signedIn(state) }, "Keep my account"));
   }
 
   function checkEmail() {
@@ -250,6 +332,7 @@
       h("h1", {}, "Ready when you are."),
       h("p", {}, `Signed in as ${state.user.email || "you"}.`),
       h("button", { class: "primary", type: "button", onclick: () => { close(); summon(); } }, "Open Saurus"),
-      out);
+      out,
+      h("button", { class: "link quiet", type: "button", onclick: () => deleteAccount(state) }, "Delete account"));
   }
 })();

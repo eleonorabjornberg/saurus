@@ -26,6 +26,18 @@ Pages, phones) and the bookmarklet through a panel of its own
   sites (the bookmarklet) only in memory for that tab, so nothing is left in
   the site's storage. It loads only where no extension bridge exists; the
   extension's session never reaches a page.
+- **Forgot password:** "Forgot password?" on the log-in screen (popup and web)
+  emails a link to `reset.html` on Saurus's site, where people choose a new
+  password. The page keeps the link's short-lived session in memory only and
+  signs it out afterwards; people then log in as usual.
+- **Delete account:** in the popup's account view (right-click the icon →
+  **Options**) or the web panel's Account view. After the password is checked
+  again, `saurus_delete_account()` deletes the user, and with it every row
+  Saurus keeps for them (all account tables, usage and passes cascade).
+- **CAPTCHA (optional):** with a Cloudflare Turnstile site key in
+  `supabase-config.js`, sign-up, log-in, reset and delete show a check in a
+  small frame from `captcha.html` on Saurus's site (the extension can't load
+  Cloudflare's script itself) and send its one-time token to Supabase.
 - **Gemini** goes through the `gemini` Edge Function, with a pass from the
   signed-in account (see `FREE_TIER.md`).
 
@@ -44,7 +56,27 @@ Pages, phones) and the bookmarklet through a panel of its own
    (e.g. `https://eleonorabjornberg.github.io/saurus/demo.html`), so the
    confirmation email's link lands somewhere useful; people then log in there
    or in the extension.
-4. Reload the extension in `chrome://extensions` and click the Saurus icon.
+4. **Authentication → URL Configuration → Redirect URLs:** add
+   `https://eleonorabjornberg.github.io/saurus/reset.html`, so password-reset
+   links may land there. (`site` in `supabase-config.js` must point at the
+   same site.)
+5. **SQL Editor:** run `supabase/migrations/20261012100000_saurus_delete_account.sql`
+   (account deletion). Safe to re-run.
+6. **Emails:** Supabase's built-in sender only sends a few emails an hour.
+   Before launch, set up your own under **Authentication → Emails → SMTP
+   Settings** (Resend, Postmark, SES…), and adjust the "Reset password" and
+   "Confirm signup" templates there.
+7. **CAPTCHA (optional, recommended before launch):**
+   1. Cloudflare dashboard → **Turnstile** → add a widget for the hostname
+      `eleonorabjornberg.github.io`. Copy the site key and the secret key.
+   2. Put the **site key** (public) in `supabase-config.js` as
+      `captchaSiteKey`, merge, and wait for GitHub Pages to publish.
+   3. Reload the extension, so its popup has the key too.
+   4. Then Supabase → **Authentication → Attack Protection → Enable CAPTCHA
+      protection**, provider Turnstile, paste the **secret key**. From this
+      moment Supabase refuses sign-up, log-in and reset without a check, so
+      do this step last.
+8. Reload the extension in `chrome://extensions` and click the Saurus icon.
 
 ## Tables
 

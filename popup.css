@@ -2,3 +2,7 @@
 body.compact .shell{padding:20px 26px 14px}body.compact .scene{height:65px}body.compact .scene img{height:65px}body.compact .scene .halo{height:48px}body.compact p{line-height:1.45;margin-bottom:14px}body.compact .field{margin-bottom:10px}body.compact .error{margin:4px 0 0}body.compact footer{margin-top:16px}body.compact .switch{margin:8px 0 0}
 h1:focus{outline:none}
 .allowance{font-size:12px;color:#3b5943;background:#ffffff88;border:1px solid #dce3d3;border-radius:12px;padding:9px 12px;margin:-6px 0 16px}
+a.button-link{display:block;text-align:center;text-decoration:none;box-sizing:border-box;border:1px solid #315b40;background:linear-gradient(#437750,#315b40);color:#fff;border-radius:13px;padding:14px 18px;font-size:13px;font-weight:650}
+iframe.captcha{display:block;width:100%;height:72px;border:0;margin:0 0 12px;background:transparent}
+button.primary.danger{border-color:#8f3a2e;background:linear-gradient(#b1503f,#8f3a2e)}
+button.link.quiet{display:block;margin:0 auto;color:#8a6f68;font-size:11px}
