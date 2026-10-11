@@ -30,7 +30,7 @@ alter table public.saurus_usage enable row level security;
 revoke all on public.saurus_gemini_tickets, public.saurus_usage from anon, authenticated;
 
 create or replace function public.saurus_limits() returns jsonb
-language sql immutable as $$
+language sql stable as $$
   select jsonb_build_object(
     'voice_seconds', 300,  -- 5 minutes of audio a day
     'pages', 30,           -- page translations a day (a re-translation after a level or language change counts)
@@ -72,17 +72,23 @@ language sql stable security definer set search_path = public as $$
   where t.ticket = p_ticket and t.expires_at > now()
 $$;
 
-create or replace function public.saurus_usage_add(
+-- Records usage and returns what is left today, so the function can stop a
+-- conversation when the user's other sessions have used the allowance up.
+-- (Dropped first: an earlier draft of this file returned void.)
+drop function if exists public.saurus_usage_add(uuid, numeric, integer, integer);
+create function public.saurus_usage_add(
   p_user uuid, p_voice numeric default 0, p_pages integer default 0, p_calls integer default 0
-) returns void
-language sql security definer set search_path = public as $$
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
   insert into public.saurus_usage (user_id, day, voice_seconds, pages, calls)
   values (p_user, (now() at time zone 'utc')::date, greatest(p_voice, 0), greatest(p_pages, 0), greatest(p_calls, 0))
   on conflict (user_id, day) do update set
     voice_seconds = public.saurus_usage.voice_seconds + excluded.voice_seconds,
     pages = public.saurus_usage.pages + excluded.pages,
-    calls = public.saurus_usage.calls + excluded.calls
-$$;
+    calls = public.saurus_usage.calls + excluded.calls;
+  return public.saurus_usage_left(p_user);
+end $$;
 
 revoke all on function public.saurus_gemini_ticket() from public, anon;
 revoke all on function public.saurus_usage_left(uuid) from public, anon, authenticated;

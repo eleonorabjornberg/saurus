@@ -48,15 +48,29 @@ async function rpc(fn: string, args: unknown) {
   return res.status === 204 ? null : await res.json();
 }
 // Who is calling, and what they have left today. Null: no valid pass. Throws if the check itself fails.
+// A pass is remembered for a few seconds (with this instance's own usage
+// subtracted), so a page translated in several batches costs one lookup.
+const PASS_TTL = 5000;
+const passes = new Map<string, { pass: Pass | null; until: number }>();
 async function passOf(ticket: string | null): Promise<Pass | null> {
   if (!ticket || ticket.length > 100) return null;
-  return (await rpc("saurus_usage_check", { p_ticket: ticket })) as Pass | null;
+  const now = Date.now();
+  const hit = passes.get(ticket);
+  if (hit && now < hit.until) return hit.pass;
+  const pass = (await rpc("saurus_usage_check", { p_ticket: ticket })) as Pass | null;
+  if (passes.size > 1000) for (const [k, v] of passes) if (now >= v.until) passes.delete(k);
+  passes.set(ticket, { pass, until: now + PASS_TTL });
+  return pass;
 }
-function record(who: Pass, voice: number, pages: number, calls: number) {
+// Records usage; resolves to what is left today afterwards (null if not recorded).
+function record(who: Pass, voice: number, pages: number, calls: number): Promise<Pass | null> {
+  who.voice_left -= voice; who.pages_left -= pages; who.calls_left -= calls; // the cached copy
   const p = rpc("saurus_usage_add", { p_user: who.user_id, p_voice: voice, p_pages: pages, p_calls: calls })
-    .catch((e) => console.error("usage not recorded:", e));
+    .then((left) => left as Pass | null)
+    .catch((e) => { console.error("usage not recorded:", e); return null; });
   // deno-lint-ignore no-explicit-any
   (globalThis as any).EdgeRuntime?.waitUntil?.(p); // let it finish after the response
+  return p;
 }
 
 const LIVE_PATH = "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
@@ -73,6 +87,8 @@ function json(status: number, body: unknown, origin: string | null) {
   return new Response(JSON.stringify(body), { status, headers: { ...cors(origin), "Content-Type": "application/json" } });
 }
 const allowedModel = (name: string) => MODELS.includes(name.replace(/^models\//, ""));
+const sizeOf = (d: unknown) => typeof d === "string" ? d.length : d instanceof ArrayBuffer ? d.byteLength : d instanceof Blob ? d.size : 0;
+const audioOnly = (m: unknown) => Array.isArray(m) && m.length === 1 && String(m[0]).toUpperCase() === "AUDIO";
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -106,18 +122,25 @@ Deno.serve(async (req) => {
       return response;
     }
     // Seconds of audio relayed in this session, estimated from message sizes
-    // (base64 PCM: 16 kHz in, 24 kHz out, 16-bit mono).
-    let used = 0, recorded = 0;
+    // (base64 PCM: 16 kHz in, 24 kHz out, 16-bit mono). Each flush also
+    // returns what is left today across all of the user's sessions, so two
+    // tabs talking at once can't each spend the whole allowance.
+    let used = 0, recorded = 0, budget = who ? who.voice_left : Infinity;
     const flush = () => {
       if (!who || used - recorded < 0.5) return;
-      record(who, used - recorded, 0, 0);
+      const at = used;
+      record(who, used - recorded, 0, 0).then((left) => {
+        if (!left) return;
+        budget = at + left.voice_left;
+        if (used >= budget) closeBoth(4002, "daily voice limit reached");
+      });
       recorded = used;
     };
     const count = (seconds: number) => {
       if (!who) return;
       used += seconds;
       if (used - recorded >= 15) flush();
-      if (used >= who.voice_left) closeBoth(4002, "daily voice limit reached");
+      if (used >= budget) closeBoth(4002, "daily voice limit reached");
     };
     const upstream = new WebSocket(`${UPSTREAM.replace(/^http/, "ws")}${LIVE_PATH}?key=${encodeURIComponent(KEY)}`);
     const queue: (string | ArrayBuffer)[] = [];
@@ -134,14 +157,18 @@ Deno.serve(async (req) => {
       if (!checked) {
         checked = true;
         try {
-          const model = String(JSON.parse(typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data)).setup?.model ?? "");
+          const setup = JSON.parse(typeof ev.data === "string" ? ev.data : new TextDecoder().decode(ev.data)).setup ?? {};
+          const model = String(setup.model ?? "");
           if (!allowedModel(model)) return closeBoth(1008, `model not allowed: ${model}`);
+          // Audio replies only: the limit is counted in audio, so a text-only
+          // session would be free.
+          if (!OPEN && !audioOnly(setup.generationConfig?.responseModalities)) return closeBoth(1008, "responseModalities must be [\"AUDIO\"]");
         } catch {
           return closeBoth(1008, "first message must be a setup message");
         }
-      }
-      if (typeof ev.data === "string" && ev.data.length > 200 && ev.data.includes("ealtimeInput")) {
-        count(ev.data.length * 0.75 / 32000); // the learner's microphone
+      } else {
+        const size = sizeOf(ev.data);
+        if (size > 200) count(size * 0.75 / 32000); // the learner's microphone (and anything else sent mid-session)
       }
       if (upstream.readyState === WebSocket.OPEN) upstream.send(ev.data);
       else queue.push(ev.data);
@@ -149,8 +176,7 @@ Deno.serve(async (req) => {
     upstream.onopen = () => { for (const m of queue.splice(0)) upstream.send(m); };
     upstream.onmessage = (ev) => {
       if (client.readyState === WebSocket.OPEN) client.send(ev.data);
-      const d = ev.data;
-      const size = typeof d === "string" ? d.length : d instanceof ArrayBuffer ? d.byteLength : (d as Blob).size ?? 0;
+      const size = sizeOf(ev.data);
       if (size > 2000) count(size * 0.75 / 48000); // Saurus's voice (transcripts and tool calls are smaller)
     };
     upstream.onclose = (ev) => closeBoth(ev.code === 1005 ? 1000 : ev.code, ev.reason);
@@ -172,8 +198,11 @@ Deno.serve(async (req) => {
       catch (e) { console.error("usage check failed:", e); return json(503, { error: { message: "usage check unavailable" } }, origin); }
       if (!who) return json(401, { error: { message: "Please sign in to Saurus to continue" } }, origin);
       const page = req.headers.get("x-saurus-page") === "1";
-      if (who.calls_left <= 0 || (page && who.pages_left <= 0)) {
+      if (page && who.pages_left <= 0) {
         return json(429, { error: { message: "You've used today's free page translations. They're back tomorrow", status: "SAURUS_LIMIT" } }, origin);
+      }
+      if (who.calls_left <= 0) {
+        return json(429, { error: { message: "You've reached today's free limit. It resets tomorrow", status: "SAURUS_LIMIT" } }, origin);
       }
       record(who, 0, page ? 1 : 0, 1);
     }
