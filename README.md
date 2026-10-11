@@ -33,9 +33,11 @@ Press a shortcut on any page and a small dino appears.
 4. **Remembers you** per language: level, struggle words, last session. It
    suggests a short drill when the same mistake repeats.
 5. **Grows with you.** The avatar's age *is* your level (hatchling,
-   juvenile, adult, elder), and it changes costume per language: beret and
-   baguette for French, lederhosen for German, flamenco dress and fan for
-   Spanish.
+   juvenile, adult, elder), and it changes costume per language across eight
+   languages: beret and baguette for French, lederhosen for German, flamenco
+   dress and fan for Spanish, and more for Swedish, Hindi, Italian, Brazilian
+   Portuguese and Mandarin Chinese. In Mandarin, levels 1 and 2 show pinyin
+   in brackets after the Chinese words, on the page and in Saurus's bubbles.
 
 No new app, no lessons to schedule: it rides along with what you already read.
 
@@ -66,7 +68,7 @@ No new app, no lessons to schedule: it rides along with what you already read.
 | `backend-mock.js` | A fake `SaurusBackend` with scripted replies and a synthetic voice. Used when nothing above is configured. |
 | `demo.html` | An article page that loads both. |
 | `manifest.json` | Chrome extension (Manifest V3) that injects both as content scripts. |
-| `assets/` | Optional avatar art: `saurus-{fr,de,es,sv,hi}-{1..4}.png`. Missing files fall back to the built-in SVG. |
+| `assets/` | Optional avatar art: `saurus-{fr,de,es,sv,hi,it,pt,zh}-{1..4}.png`. Missing files fall back to the plain Saurus (`saurus-plain.png`); Italian, Portuguese and Mandarin use it until their pictures exist. |
 
 ## Run it locally
 
@@ -230,7 +232,7 @@ secrets to your extension's origin to narrow it.
 | Click a bubble | Expands / collapses it. Scroll the bubbles to see older ones. |
 | Alt+↑ / Alt+↓ | Demo: level up / down (`SaurusBackend.demo.levelUp/levelDown`). |
 | Alt+D | Demo: drill offer (`SaurusBackend.demo.drillOffer`). |
-| Alt+1 / 2 / 3 / 4 / 5 | Switch to French / German / Spanish / Swedish / Hindi (`setLanguage`). |
+| Alt+1 … 8 | Switch to French / German / Spanish / Swedish / Hindi / Italian / Portuguese (Brazil) / Mandarin (`setLanguage`). |
 
 Mock only: typing `/error` makes the mock emit an `error` event.
 
@@ -277,7 +279,7 @@ window.SaurusBackend = {
   endOfSpeech()
   sendText(text)
   sendContext({ type: "word_pressed", word, sentence })
-  setLanguage(code)                       // "fr" | "de" | "es" | "sv" | "hi"
+  setLanguage(code)                       // "fr" | "de" | "es" | "sv" | "hi" | "it" | "pt" | "zh"
   stop()
   on(eventName, handler)
 
@@ -294,7 +296,7 @@ window.SaurusBackend = {
 | `endOfSpeech()` | Button / Space released | Only called if at least one chunk was sent. |
 | `sendText(text)` | Muted mode, Enter; also the drill buttons send `"Yes"` / `"Not now"` | The front end shows the user's bubble itself; **do not** echo typed text back as a `transcript`. |
 | `sendContext({type, word, sentence})` | A word on the page is clicked | `sentence` is the sentence around the word, as currently shown (translated or not). |
-| `setLanguage(code)` | Alt+1/2/3/4/5 | Reply with a `language` event (and a `level` event for that language). |
+| `setLanguage(code)` | Alt+1 … 8 | Reply with a `language` event (and a `level` event for that language). |
 | `stop()` | Alt+S (dismiss) | Close the session. Events emitted after this are ignored. |
 | `on(name, handler)` | Once per backend object | Keep a list of handlers per event. No `off` needed. |
 | `demo.*` | Alt+↑, Alt+↓, Alt+D | Optional. If missing, Saurus says the shortcut isn't supported. Fire the same events you would normally (`level` + `celebrate`, `drill_offer`). |

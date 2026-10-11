@@ -32,6 +32,8 @@
   .try button.go{background:#1F7A4D;border-color:#1F7A4D;color:#fff;font-weight:700}
   .try .sep{width:1px;height:20px;background:var(--line)}
   .try .hint{color:var(--muted)}
+  /* bookmarklet: laptops and desktops only (no bookmarks bar on phones) */
+  @media (hover: none), (pointer: coarse), (max-width: 820px){.try .bm,.try .bm-hint,.try .bm-sep{display:none}}
   .try .bm{background:#2D5E9E;color:#fff;border-radius:999px;padding:6px 12px;font-weight:700;text-decoration:none;cursor:grab}
 </style>
 </head>
@@ -44,13 +46,16 @@
   <button type="button" data-key="Digit3">Español</button>
   <button type="button" data-key="Digit4">Svenska</button>
   <button type="button" data-key="Digit5">हिन्दी</button>
+  <button type="button" data-key="Digit6">Italiano</button>
+  <button type="button" data-key="Digit7">Português</button>
+  <button type="button" data-key="Digit8">中文</button>
   <span class="sep"></span>
   <button type="button" data-key="ArrowDown" aria-label="Level down">Level −</button>
   <button type="button" data-key="ArrowUp" aria-label="Level up">Level +</button>
   <span class="hint">Then hold 🎙 and talk, or tap a word.</span>
-  <span class="sep"></span>
-  <a class="bm" href="javascript:(function(){var s=document.createElement('script');s.src='https://eleonorabjornberg.github.io/saurus/bookmarklet.js?'+Date.now();document.body.appendChild(s)})()" title="Drag me to your bookmarks bar, then click it on any article">🦕 Saurus anywhere</a>
-  <span class="hint">← drag to your bookmarks bar, click it on any article</span>
+  <span class="sep bm-sep"></span>
+  <a class="bm" onclick="event.preventDefault(); alert('Drag this button to your bookmarks bar. Then open any article and click the bookmark to bring Saurus there.')" href="javascript:(function(){var s=document.createElement('script');s.src='https://eleonorabjornberg.github.io/saurus/bookmarklet.js?'+Date.now();document.body.appendChild(s)})()" title="Drag me to your bookmarks bar, then click it on any article">🦕 Saurus anywhere</a>
+  <span class="hint bm-hint">← drag to your bookmarks bar, click it on any article</span>
 </div>
 <header class="site">
   <span class="logo">🦕 Saurus</span>
@@ -66,59 +71,27 @@
 
 <main class="wrap">
   <article>
-    <p class="kicker">The New Agentic Economy Hackathon · Saurus</p>
+    <p class="kicker">The New Agentic Economy Hackathon</p>
     <h1>Saurus: a language tutor that lives in your browser</h1>
     <p class="byline">By Eleonora Björnberg and Mahdi Yusuf · Built with Gemini and Supabase</p>
 
-    <p>Saurus is a small dinosaur that lives in your browser and helps you learn a language through what you already read. Press Alt+S on any article: the page changes to your level, and Saurus talks with you about it, by voice or by typing. It remembers your mistakes, practises them with you, and grows up as you improve.</p>
+    <p>Language apps teach words you'll never use, and nobody corrects you when you speak. Saurus brings the lesson to what you already read.</p>
 
-    <p><strong>Try it right here:</strong> press the green <em>Try Saurus</em> button at the top, or Alt+S (Option+S on a Mac). This page is about to become your first lesson.</p>
+    <h2 id="try">Try it</h2>
+    <p>Press <em>Try Saurus</em> at the top, or Alt+S (Option+S on a Mac). This page becomes your lesson. Change the language and level with the buttons, hold the talk button to speak, or press any highlighted word.</p>
 
-    <h2 id="problem">The problem</h2>
-    <p>Most of us learn languages in a separate app, away from our real day. The basics on apps are too basic, we almost never speak, and real classes are expensive. Everyone knows the best way to learn is immersion, but immersion is out of reach for most people.</p>
-    <p>At the same time, we read every day: the news, newsletters, lecture notes, work documents. That reading is dead time for language learning.</p>
-
-    <h2 id="who">Who it is for</h2>
-    <p>Saurus is for busy people learning a language for something real: an exam, a move, a new job. They don't have time for lessons, but they do read every day. Saurus turns that reading into practice, on topics they actually care about.</p>
-
-    <h2 id="how">How it works</h2>
+    <h2 id="how">What it does</h2>
     <ul>
-      <li><strong>The page meets you at your level.</strong> As a beginner, the page stays in your language with a few key words swapped. Then it becomes simple text, and finally natural, fluent text.</li>
-      <li><strong>Saurus speaks first.</strong> It asks you about the substance of the page, not textbook sentences, and gently corrects you.</li>
-      <li><strong>Press any word</strong> to ask what it means. Press and hold a paragraph to see the original.</li>
-      <li><strong>It remembers.</strong> Your level and the words you get wrong are saved per language. Next time, Saurus brings them back, highlights them on the page and checks you know them.</li>
-      <li><strong>It decides what to practise.</strong> When the same mistake comes back, Saurus offers a five-minute drill.</li>
-      <li><strong>It grows with you.</strong> The dinosaur ages from hatchling to elder as your level rises, and changes costume when you switch language.</li>
-      <li><strong>Five languages:</strong> French, German, Spanish, Swedish and Hindi. Switch by voice ("let's do Spanish") or with Alt+1 to 5.</li>
-      <li><strong>Voice or text.</strong> Hold the talk button (or Space) to speak, or press the pencil to type quietly.</li>
+      <li><strong>Meets you at your level.</strong> A beginner sees a few key words swapped; an expert reads fluent text.</li>
+      <li><strong>Talks with you</strong> about what you're reading, by voice or typing, and gently corrects you.</li>
+      <li><strong>Remembers</strong> the words you get wrong, brings them back, and offers a quick drill.</li>
+      <li><strong>Grows with you:</strong> the dinosaur ages from hatchling to elder, with a costume for each of eight languages.</li>
     </ul>
 
-    <h2 id="try">Three ways to try it</h2>
-    <ul>
-      <li><strong>On this page:</strong> press <em>Try Saurus</em> at the top. It works on phones too. Use the language and level buttons to see the page change.</li>
-      <li><strong>On any website:</strong> drag the blue <em>Saurus anywhere</em> button to your bookmarks bar, open any article, and click it.</li>
-      <li><strong>The full Chrome extension, with your own account:</strong> <a href="https://github.com/eleonorabjornberg/saurus/archive/refs/heads/main.zip">download the ZIP</a>, open chrome://extensions, turn on Developer mode, choose Load unpacked, pick the unzipped folder, click the Saurus icon to create an account, then press Alt+S on any article. It also reads Google Docs and Slides from a screenshot.</li>
-    </ul>
+    <h2 id="built">How it's built</h2>
+    <p>Gemini Live for real-time voice, Gemini Flash to rewrite the page at your level, and Supabase for memory, accounts and keeping our keys off your computer. On any website, install the Chrome extension from <a href="https://github.com/eleonorabjornberg/saurus">GitHub</a>.</p>
 
-    <h2 id="why">Why it is more than a prompt</h2>
-    <p>A chatbot answers when you ask. Saurus is an agent: it speaks first, decides when to check you, drills you or levels you up, and remembers across pages, sessions and languages. Its decisions run in the database, so they follow you everywhere.</p>
-
-    <h2 id="built">How it is built</h2>
-    <ul>
-      <li><strong>Gemini Live</strong> for the real-time voice conversation, with tools the tutor calls while it talks: highlight a word, log a mistake, level up, offer a drill, switch language.</li>
-      <li><strong>Gemini Flash</strong> translates the page at your level, what is on screen first, and reads screenshots of Google Docs and Slides.</li>
-      <li><strong>Supabase</strong> is the whole backend: database functions keep your level, mistakes and session summaries and decide what to practise next; an Edge Function keeps the Gemini keys secret; Supabase Auth gives every learner their own account, protected by row-level security.</li>
-      <li><strong>A Chrome extension</strong> in plain JavaScript, with no build step. The microphone is allowed once for all sites.</li>
-    </ul>
-
-    <h2 id="next">What comes next</h2>
-    <ul>
-      <li>One-click install from the Chrome Web Store.</li>
-      <li>A phone app, and learning from videos through their captions.</li>
-      <li>A placement quiz on the first day, and Google sign-in.</li>
-    </ul>
-
-    <blockquote>You're not bad at languages. You've just been learning them in the wrong place. Saurus is here to help.</blockquote>
+    <blockquote>You're not bad at languages. You've just been learning them in the wrong place.</blockquote>
   </article>
 
   <aside aria-label="Links">
