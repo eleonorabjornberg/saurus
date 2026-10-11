@@ -48,6 +48,7 @@
   <button type="button" data-key="ArrowDown" aria-label="Level down">Level −</button>
   <button type="button" data-key="ArrowUp" aria-label="Level up">Level +</button>
   <span class="hint">Then hold 🎙 and talk, or tap a word.</span>
+  <button type="button" class="account" hidden>Account</button>
   <span class="sep"></span>
   <a class="bm" href="javascript:(function(){var s=document.createElement('script');s.src='https://eleonorabjornberg.github.io/saurus/bookmarklet.js?'+Date.now();document.body.appendChild(s)})()" title="Drag me to your bookmarks bar, then click it on any article">🦕 Saurus anywhere</a>
   <span class="hint">← drag to your bookmarks bar, click it on any article</span>
@@ -142,9 +143,14 @@
     window.dispatchEvent(new KeyboardEvent("keydown", { code: b.dataset.key, altKey: true, bubbles: true }));
     b.blur();
   });
+  // Sign in, switch or sign out (web-account.js; absent when sign-in isn't set up).
+  document.querySelector(".try .account").addEventListener("click", () => window.SaurusAccount && window.SaurusAccount.request("open"));
 </script>
 <script src="config.js"></script>
 <script src="supabase-config.js"></script>
+<script src="auth-service.js"></script>
+<script src="web-account.js"></script>
+<script>if (window.SaurusAccount && window.SaurusAccount.ticket) document.querySelector(".try .account").hidden = false;</script>
 <script src="backend.js"></script>
 <script src="backend-gemini.js"></script>
 <script src="backend-mock.js"></script>

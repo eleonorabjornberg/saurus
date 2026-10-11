@@ -50,8 +50,9 @@ runs the function against local stand-ins for Supabase and Gemini.
 
 ## Known gaps
 
-- The hosted demo page and the bookmarklet have no sign-in, so they now run
-  on the offline mock. They need a web sign-in to use the live tutor.
+- The hosted demo page and the bookmarklet sign in with `web-account.js`
+  (the same accounts as the extension). Without it they run on the offline
+  mock.
 - Usage is estimated from message sizes, not billed tokens.
 - Limits are checked before a call and recorded after, so a burst of parallel
   text calls, or about 15 seconds per open voice session, can go slightly

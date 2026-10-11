@@ -1262,8 +1262,9 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
   // Summon / dismiss
   // ---------------------------------------------------------------------
   // In the extension you must be signed in (auth-bridge.js): without an
-  // account, the Saurus popup opens to sign up or log in instead. The demo
-  // page (no extension) has no sign-in and opens straight away.
+  // account, the Saurus popup opens to sign up or log in instead. On the
+  // demo page and the bookmarklet, web-account.js shows its own sign-in panel;
+  // with no account bridge at all, Saurus opens straight away.
   let checkingAccount = false;
   function openSaurus() {
     if (active || checkingAccount) return;
