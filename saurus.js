@@ -12,12 +12,15 @@
   const root = document.documentElement;
   if (window.__saurusLoaded || root.hasAttribute("data-saurus-loaded")) return;
   window.__saurusLoaded = true;
-  root.setAttribute("data-saurus-loaded", "");
+  // "extension" or "page": the bookmarklet needs to know which one is here.
+  let fromExtension = false;
+  try { fromExtension = !!(typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id); } catch (_) {}
+  root.setAttribute("data-saurus-loaded", fromExtension ? "extension" : "page");
 
   // ---------------------------------------------------------------------
   // Constants
   // ---------------------------------------------------------------------
-  const LANG_NAME = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi" };
+  const LANG_NAME = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi", it: "Italian", pt: "Portuguese", zh: "Mandarin" };
   const LEVEL_NAME = { 1: "hatchling", 2: "juvenile", 3: "adult", 4: "elder" };
   const LEVEL_SIZE = { 1: 80, 2: 92, 3: 104, 4: 112 }; // px: desktop-pet sized, grows with level
   const CORNER_KEY = "saurus.corner";
@@ -1223,6 +1226,14 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
       if (!d) return;
       const who = d.who === "user" ? "u" : "s";
       const text = String(d.text ?? "");
+      // A finished bubble rewritten (e.g. pinyin added): find it by its old text.
+      if (d.revise) {
+        const old = String(d.revise);
+        const items = [...ui.log.querySelectorAll(`.bubble.${who}`)].reverse();
+        const el = items.find((b) => b.querySelector(".text").textContent === old);
+        if (el) setBubbleText(el, text);
+        return;
+      }
       if (live[who]) setBubbleText(live[who], text);
       else live[who] = addBubble(who, text, { live: !d.final });
       if (d.final) finishLive(who);
@@ -1412,6 +1423,9 @@ mark.saurus-hl{background:transparent;color:inherit;border-radius:.14em;box-shad
         Digit3: () => setLang("es"),
         Digit4: () => setLang("sv"),
         Digit5: () => setLang("hi"),
+        Digit6: () => setLang("it"),
+        Digit7: () => setLang("pt"),
+        Digit8: () => setLang("zh"),
       }[e.code];
       if (action) {
         e.preventDefault();

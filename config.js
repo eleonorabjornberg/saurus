@@ -16,5 +16,5 @@ window.SAURUS_CONFIG = {
   apiBase: "",                    // e.g. "https://<project>.supabase.co/functions/v1/gemini"
   liveModel: "gemini-3.8-live",   // voice (Gemini Live)
   textModel: "gemini-3.8-flash",  // page translation
-  language: "de",                 // starting language: "de", "fr", "es" or "sv"
+  language: "de",                 // starting language: "fr", "de", "es", "sv", "hi", "it", "pt" or "zh"
 };
