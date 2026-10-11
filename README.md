@@ -82,7 +82,8 @@ Use `localhost` (not `file://`) so the browser allows the microphone.
 As an extension: `chrome://extensions` → Developer mode → **Load unpacked** →
 pick this folder. Click the Saurus icon in the toolbar to create an account or
 log in (the extension requires it; see [AUTH_SETUP.md](AUTH_SETUP.md)), then
-press Alt+S on any page. The demo page needs no account.
+press Alt+S on any page. The demo page and the bookmarklet ask you to sign in
+with the same account (`web-account.js`).
 
 ## Use the real Gemini backend
 
@@ -215,9 +216,9 @@ WebSocket. Set up once:
 
 On the free plan a function runs at most 150 s, so a Live voice session
 through it is cut every ~2.5 minutes; Saurus reconnects by itself and
-carries the conversation on. Note the function is open to anyone who finds
-its URL (it only allows the configured models); set `ALLOWED_ORIGINS` in its
-secrets to your extension's origin to narrow it.
+carries the conversation on. The function serves signed-in accounts only,
+with daily free limits per account; see [FREE_TIER.md](FREE_TIER.md) (run its
+migration before deploying the function).
 
 ## Controls
 
