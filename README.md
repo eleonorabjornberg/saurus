@@ -68,7 +68,7 @@ No new app, no lessons to schedule: it rides along with what you already read.
 | `backend-mock.js` | A fake `SaurusBackend` with scripted replies and a synthetic voice. Used when nothing above is configured. |
 | `demo.html` | An article page that loads both. |
 | `manifest.json` | Chrome extension (Manifest V3) that injects both as content scripts. |
-| `assets/` | Optional avatar art: `saurus-{fr,de,es,sv,hi,it,pt,zh}-{1..4}.png`. Missing files fall back to the plain Saurus (`saurus-plain.png`); Portuguese and Mandarin use it until their pictures exist. |
+| `assets/` | Optional avatar art: `saurus-{fr,de,es,sv,hi,it,pt,zh}-{1..4}.png`. Missing files fall back to the plain Saurus (`saurus-plain.png`); Mandarin uses it until its pictures exist. |
 
 ## Run it locally
 
