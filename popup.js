@@ -64,12 +64,24 @@ async function route(state,autoLaunch=true){
   if(!state.user){welcome();return;}
   if(!state.profile?.onboarded){onboarding();return;}
   document.querySelector("#dinosaur").src=`assets/saurus-${state.profile.language}-1.png`;
-  screen('<div class="center card"><div class="eyebrow">YOUR ADVENTURE CONTINUES</div><h1 id="heading">Ready when you are.</h1><p id="identity"></p><button id="launch" class="primary">Open Saurus ↗</button><button id="logout" class="link">Sign out</button></div>');
+  screen('<div class="center card"><div class="eyebrow">YOUR ADVENTURE CONTINUES</div><h1 id="heading">Ready when you are.</h1><p id="identity"></p><p id="allowance" class="allowance" hidden></p><button id="launch" class="primary">Open Saurus ↗</button><button id="logout" class="link">Sign out</button></div>');
   document.querySelector("#identity").textContent=state.offline?"You’re still signed in. Your cloud progress will return when you’re online.":"Your companion remembers you. Let’s pick up where you left off.";
   document.querySelector("#launch").onclick=launch;
   document.querySelector("#logout").onclick=async()=>{try{await request("signout");account=null;welcome();}catch(error){feedback.textContent=error.message;}};
   // Account view can be reached with popup.html#account; normal action opens immediately.
   if(autoLaunch && location.hash!=="#account") await launch();
+  allowance(); // still open: the account view, or Saurus couldn't launch here
+}
+// What is left of today's free allowance (from saurus_gemini_ticket()).
+async function allowance(){
+  const el=document.querySelector("#allowance");if(!el)return;
+  try{
+    const t=await request("ticket");
+    const s=Math.max(0,Number(t.voice_left)||0),pages=Math.max(0,Math.floor(Number(t.pages_left)||0));
+    const talk=s>=60?`${Math.floor(s/60)} min of conversation`:s>0?"under a minute of conversation":"no conversation time";
+    el.textContent=`Left today: ${talk} · ${pages} page translation${pages===1?"":"s"}.`;
+    el.hidden=false;
+  }catch(_){el.hidden=true;} // no free tier on this project yet
 }
 document.querySelector(".brand").onclick=(event)=>{event.preventDefault();account?.user?route(account,false):welcome();};
 screen('<div class="center"><h1 id="heading">Finding your companion…</h1><p>Just a moment.</p></div>');
