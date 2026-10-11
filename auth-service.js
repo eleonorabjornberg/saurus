@@ -98,7 +98,7 @@
         }
         const allowed = ["profile", "onboard", "preferences", "memory", "level", "answer", "summary"];
         if (!allowed.includes(payload.op)) throw new Error("Unsupported memory operation.");
-        if (payload.op !== "profile" && !["fr", "de", "es", "sv", "hi"].includes(payload.args?.language)) throw new Error("Choose a supported language.");
+        if (payload.op !== "profile" && !["fr", "de", "es", "sv", "hi", "it", "pt", "zh"].includes(payload.args?.language)) throw new Error("Choose a supported language.");
         return memory(payload.op, payload.args || {});
       }
       throw new Error("Unsupported account operation.");

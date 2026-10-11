@@ -13,7 +13,8 @@
   if (window.SaurusBackend) return; // a real backend is already present
 
   // ---------------------------------------------------------------------
-  // Tiny dictionary used to "translate" pages. English -> fr / de / es / sv / hi.
+  // Tiny dictionary used to "translate" pages. English -> fr / de / es / sv / hi
+  // (it / pt / zh in DICT_MORE below).
   // ---------------------------------------------------------------------
   const DICT = {
     mountain: ["montagne", "Berg", "montaña", "berg", "पहाड़"], mountains: ["montagnes", "Berge", "montañas", "berg", "पहाड़"],
@@ -76,14 +77,146 @@
     jobs: ["emplois", "Jobs", "empleos", "jobb", "नौकरियाँ"], human: ["humain", "Mensch", "humano", "människa", "इंसान"],
     reason: ["raison", "Grund", "razón", "anledning", "कारण"], machine: ["machine", "Maschine", "máquina", "maskin", "मशीन"],
   };
-  const LANG_INDEX = { fr: 0, de: 1, es: 2, sv: 3, hi: 4 };
-  const LANG_NAME = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi" };
+  // Italian, Brazilian Portuguese and Mandarin (characters + pinyin) for the
+  // same words, kept apart so the five original columns stay as they were.
+  const DICT_MORE = {
+    mountain: ["montagna", "montanha", "山", "shān"],
+    mountains: ["montagne", "montanhas", "山", "shān"],
+    village: ["villaggio", "vila", "村庄", "cūnzhuāng"],
+    morning: ["mattina", "manhã", "早上", "zǎoshang"],
+    day: ["giorno", "dia", "天", "tiān"],
+    night: ["notte", "noite", "夜晚", "yèwǎn"],
+    sun: ["sole", "sol", "太阳", "tàiyáng"],
+    snow: ["neve", "neve", "雪", "xuě"],
+    water: ["acqua", "água", "水", "shuǐ"],
+    river: ["fiume", "rio", "河", "hé"],
+    lake: ["lago", "lago", "湖", "hú"],
+    bread: ["pane", "pão", "面包", "miànbāo"],
+    coffee: ["caffè", "café", "咖啡", "kāfēi"],
+    cheese: ["formaggio", "queijo", "奶酪", "nǎilào"],
+    house: ["casa", "casa", "房子", "fángzi"],
+    road: ["strada", "estrada", "路", "lù"],
+    path: ["sentiero", "trilha", "小路", "xiǎolù"],
+    friend: ["amico", "amigo", "朋友", "péngyou"],
+    friends: ["amici", "amigos", "朋友们", "péngyoumen"],
+    family: ["famiglia", "família", "家人", "jiārén"],
+    train: ["treno", "trem", "火车", "huǒchē"],
+    station: ["stazione", "estação", "车站", "chēzhàn"],
+    tree: ["albero", "árvore", "树", "shù"],
+    trees: ["alberi", "árvores", "树", "shù"],
+    bird: ["uccello", "pássaro", "鸟", "niǎo"],
+    birds: ["uccelli", "pássaros", "鸟", "niǎo"],
+    dog: ["cane", "cachorro", "狗", "gǒu"],
+    cat: ["gatto", "gato", "猫", "māo"],
+    book: ["libro", "livro", "书", "shū"],
+    window: ["finestra", "janela", "窗户", "chuānghu"],
+    door: ["porta", "porta", "门", "mén"],
+    market: ["mercato", "mercado", "市场", "shìchǎng"],
+    food: ["cibo", "comida", "食物", "shíwù"],
+    dinner: ["cena", "jantar", "晚饭", "wǎnfàn"],
+    breakfast: ["colazione", "café da manhã", "早饭", "zǎofàn"],
+    weekend: ["fine settimana", "fim de semana", "周末", "zhōumò"],
+    summer: ["estate", "verão", "夏天", "xiàtiān"],
+    winter: ["inverno", "inverno", "冬天", "dōngtiān"],
+    weather: ["tempo", "tempo", "天气", "tiānqì"],
+    cold: ["freddo", "frio", "冷", "lěng"],
+    warm: ["caldo", "quente", "暖和", "nuǎnhuo"],
+    beautiful: ["bello", "bonito", "美丽", "měilì"],
+    small: ["piccolo", "pequeno", "小", "xiǎo"],
+    big: ["grande", "grande", "大", "dà"],
+    old: ["vecchio", "velho", "老", "lǎo"],
+    new: ["nuovo", "novo", "新", "xīn"],
+    happy: ["felice", "feliz", "快乐", "kuàilè"],
+    quiet: ["tranquillo", "tranquilo", "安静", "ānjìng"],
+    green: ["verde", "verde", "绿色", "lǜsè"],
+    blue: ["blu", "azul", "蓝色", "lánsè"],
+    white: ["bianco", "branco", "白色", "báisè"],
+    red: ["rosso", "vermelho", "红色", "hóngsè"],
+    walk: ["camminare", "caminhar", "散步", "sànbù"],
+    eat: ["mangiare", "comer", "吃", "chī"],
+    drink: ["bere", "beber", "喝", "hē"],
+    sleep: ["dormire", "dormir", "睡觉", "shuìjiào"],
+    read: ["leggere", "ler", "读", "dú"],
+    always: ["sempre", "sempre", "总是", "zǒngshì"],
+    today: ["oggi", "hoje", "今天", "jīntiān"],
+    tomorrow: ["domani", "amanhã", "明天", "míngtiān"],
+    slowly: ["lentamente", "devagar", "慢慢地", "mànmàn de"],
+    city: ["città", "cidade", "城市", "chéngshì"],
+    hotel: ["albergo", "hotel", "酒店", "jiǔdiàn"],
+    room: ["stanza", "quarto", "房间", "fángjiān"],
+    garden: ["giardino", "jardim", "花园", "huāyuán"],
+    flowers: ["fiori", "flores", "花", "huā"],
+    church: ["chiesa", "igreja", "教堂", "jiàotáng"],
+    bridge: ["ponte", "ponte", "桥", "qiáo"],
+    music: ["musica", "música", "音乐", "yīnyuè"],
+    time: ["tempo", "tempo", "时间", "shíjiān"],
+    week: ["settimana", "semana", "星期", "xīngqī"],
+    people: ["gente", "pessoas", "人们", "rénmen"],
+    child: ["bambino", "criança", "孩子", "háizi"],
+    children: ["bambini", "crianças", "孩子们", "háizimen"],
+    wine: ["vino", "vinho", "葡萄酒", "pútaojiǔ"],
+    apple: ["mela", "maçã", "苹果", "píngguǒ"],
+    apples: ["mele", "maçãs", "苹果", "píngguǒ"],
+    hill: ["collina", "colina", "小山", "xiǎoshān"],
+    valley: ["valle", "vale", "山谷", "shāngǔ"],
+    sky: ["cielo", "céu", "天空", "tiānkōng"],
+    cake: ["torta", "bolo", "蛋糕", "dàngāo"],
+    law: ["legge", "lei", "法律", "fǎlǜ"],
+    laws: ["leggi", "leis", "法律", "fǎlǜ"],
+    rules: ["regole", "regras", "规则", "guīzé"],
+    company: ["azienda", "empresa", "公司", "gōngsī"],
+    companies: ["aziende", "empresas", "公司", "gōngsī"],
+    risk: ["rischio", "risco", "风险", "fēngxiǎn"],
+    data: ["dati", "dados", "数据", "shùjù"],
+    court: ["tribunale", "tribunal", "法院", "fǎyuàn"],
+    money: ["soldi", "dinheiro", "钱", "qián"],
+    bank: ["banca", "banco", "银行", "yínháng"],
+    banks: ["banche", "bancos", "银行", "yínháng"],
+    work: ["lavoro", "trabalho", "工作", "gōngzuò"],
+    government: ["governo", "governo", "政府", "zhèngfǔ"],
+    year: ["anno", "ano", "年", "nián"],
+    years: ["anni", "anos", "年", "nián"],
+    country: ["paese", "país", "国家", "guójiā"],
+    countries: ["paesi", "países", "国家", "guójiā"],
+    important: ["importante", "importante", "重要", "zhòngyào"],
+    question: ["domanda", "pergunta", "问题", "wèntí"],
+    decision: ["decisione", "decisão", "决定", "juédìng"],
+    price: ["prezzo", "preço", "价格", "jiàgé"],
+    customers: ["clienti", "clientes", "顾客", "gùkè"],
+    report: ["rapporto", "relatório", "报告", "bàogào"],
+    team: ["squadra", "equipe", "团队", "tuánduì"],
+    future: ["futuro", "futuro", "未来", "wèilái"],
+    world: ["mondo", "mundo", "世界", "shìjiè"],
+    simple: ["semplice", "simples", "简单", "jiǎndān"],
+    free: ["libero", "livre", "自由", "zìyóu"],
+    fine: ["multa", "multa", "罚款", "fákuǎn"],
+    fines: ["multe", "multas", "罚款", "fákuǎn"],
+    loan: ["prestito", "empréstimo", "贷款", "dàikuǎn"],
+    job: ["lavoro", "emprego", "工作", "gōngzuò"],
+    jobs: ["lavori", "empregos", "工作", "gōngzuò"],
+    human: ["umano", "humano", "人类", "rénlèi"],
+    reason: ["ragione", "razão", "原因", "yuányīn"],
+    machine: ["macchina", "máquina", "机器", "jīqì"],
+  };
+  const LANG_INDEX = { fr: 0, de: 1, es: 2, sv: 3, hi: 4, it: 5, pt: 6, zh: 7 };
+  const LANG_NAME = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi", it: "Italian", pt: "Portuguese", zh: "Mandarin" };
+  // The word for an English entry in a language; Mandarin at levels 1-2
+  // also gets its pinyin.
+  function wordIn(en, language) {
+    const li = LANG_INDEX[language] ?? 0;
+    if (li < 5) return { word: DICT[en][li], pinyin: null };
+    const m = DICT_MORE[en];
+    return { word: m[li - 5], pinyin: language === "zh" ? m[3] : null };
+  }
   const DENSITY = { 1: 0.25, 2: 0.5, 3: 0.8, 4: 1 };
 
   // Reverse lookup: foreign word (lower case) -> English
   const REVERSE = {};
   for (const [en, tr] of Object.entries(DICT)) {
     for (const w of tr) REVERSE[w.toLowerCase()] = en;
+  }
+  for (const [en, tr] of Object.entries(DICT_MORE)) {
+    for (const w of tr.slice(0, 3)) REVERSE[w.toLowerCase()] = en;
   }
 
   const SCRIPT = {
@@ -147,6 +280,42 @@
       drill: [["bread", "रोटी"], ["water", "पानी"], ["apple", "सेब"]],
       yes: "चलो!", no: "कोई बात नहीं, later!", correct: "बिल्कुल सही!",
     },
+    it: {
+      hello: "Ciao! Ora in italiano. Che ne pensi di questo articolo?",
+      heard: ["Come si dice mountain in italiano?", "Mi piace molto il caffè.", "Oggi il tempo è bello."],
+      replies: [
+        "Molto bene! Most Italian nouns end in -o or -a.",
+        "Bravo! Your Italian sounds more natural already.",
+        "Ottimo! Let's keep going.",
+      ],
+      drillTopic: "café words",
+      drill: [["coffee", "caffè"], ["bread", "pane"], ["cake", "torta"]],
+      yes: "Andiamo!", no: "Va bene, later!", correct: "Perfetto!",
+    },
+    pt: {
+      hello: "Oi! Agora em português. O que você achou deste artigo?",
+      heard: ["Como se diz mountain em português?", "Eu gosto muito de café.", "O tempo está bonito hoje."],
+      replies: [
+        "Muito bem! In Brazil, \u201cvocê\u201d is the everyday \u201cyou\u201d.",
+        "Mandou bem! Your Portuguese is getting stronger.",
+        "Ótimo! Let's keep going.",
+      ],
+      drillTopic: "food words",
+      drill: [["bread", "pão"], ["cheese", "queijo"], ["apple", "maçã"]],
+      yes: "Bora!", no: "Tudo bem, later!", correct: "Isso aí!",
+    },
+    zh: {
+      hello: "你好 (nǐ hǎo)! Now in Mandarin. 你觉得这篇文章怎么样 (nǐ juéde zhè piān wénzhāng zěnmeyàng)?",
+      heard: ["Mountain 用中文怎么说?", "我很喜欢喝咖啡。", "今天天气很好。"],
+      replies: [
+        "很好 (hěn hǎo)! Mandarin has four tones; listen for them.",
+        "太棒了 (tài bàng le)! Your tones are getting clearer.",
+        "不错 (bú cuò)! Let's keep going.",
+      ],
+      drillTopic: "food words",
+      drill: [["bread", "面包"], ["water", "水"], ["apple", "苹果"]],
+      yes: "我们开始吧 (wǒmen kāishǐ ba)!", no: "没关系 (méi guānxi), later!", correct: "对了 (duì le)!",
+    },
   };
 
   // ---------------------------------------------------------------------
@@ -155,7 +324,7 @@
   const handlers = {};
   let timers = [];
   let lang = (window.SAURUS_CONFIG && window.SAURUS_CONFIG.language) || "de";
-  const levels = { fr: 1, de: 1, es: 1, sv: 1, hi: 1 };
+  const levels = { fr: 1, de: 1, es: 1, sv: 1, hi: 1, it: 1, pt: 1, zh: 1 };
   let running = false;
   let state = "idle";
   let pageWords = []; // [{foreign, en}] words the last translation used
@@ -204,8 +373,11 @@
 
   // Speak a line: state "speaking", transcript revealed word by word,
   // audio streamed in 100 ms chunks, then "idle". `after` runs when done.
+  // Mandarin lines carry pinyin in brackets; it shows only at levels 1-2.
+  const PINYIN = /\s*\([a-zA-Zāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜü' ]+\)/g;
   function speak(text, after) {
     cancelSpeech();
+    if (lang === "zh" && levels.zh > 2) text = text.replace(PINYIN, "");
     const words = text.split(/\s+/).filter(Boolean);
     const total = words.length * WORD_MS + 300;
     speech = { words, said: 0 };
@@ -331,7 +503,6 @@
     return (h >>> 0) / 4294967295;
   }
   function translateText(text, language, level) {
-    const li = LANG_INDEX[language] ?? 0;
     const density = DENSITY[level] ?? 0.25;
     const used = [];
     let any = false;
@@ -344,10 +515,11 @@
         return escapeHtml(part);
       }
       any = true;
-      let f = tr[li];
+      const { word, pinyin } = wordIn(part.toLowerCase(), language);
+      let f = word;
       if (part[0] === part[0].toUpperCase()) f = f[0].toUpperCase() + f.slice(1);
       used.push({ foreign: f, en: part.toLowerCase() });
-      return `<mark>${escapeHtml(f)}</mark>`;
+      return `<mark>${escapeHtml(f)}</mark>` + (pinyin && level <= 2 ? ` (${escapeHtml(pinyin)})` : "");
     }).join("");
     return { html, used };
   }
@@ -436,8 +608,8 @@
         if (en) {
           speak(`« ${word} » means “${en}”. Try using it out loud: “${capitalize(ctx.sentence || word)}”`);
         } else if (DICT[word.toLowerCase()]) {
-          const f = DICT[word.toLowerCase()][LANG_INDEX[lang]];
-          speak(`In ${LANG_NAME[lang]}, “${word}” is « ${f} ».`);
+          const { word: f, pinyin } = wordIn(word.toLowerCase(), lang);
+          speak(`In ${LANG_NAME[lang]}, “${word}” is « ${f} »${pinyin ? ` (${pinyin})` : ""}.`);
         } else {
           speak(`“${word}”: that one stays in English for now. Want to hear it in a sentence?`);
         }
