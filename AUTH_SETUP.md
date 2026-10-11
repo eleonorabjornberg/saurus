@@ -1,8 +1,9 @@
 # Saurus accounts
 
-Account sign-in is by Mahdi Yusuf. In the Chrome extension, Saurus asks you
-to sign in first. The public demo page (`demo.html`, GitHub Pages, phones) has
-no sign-in and keeps the anonymous per-browser memory.
+Account sign-in is by Mahdi Yusuf. Saurus asks you to sign in first: in the
+Chrome extension through its popup, and on the demo page (`demo.html`, GitHub
+Pages, phones) and the bookmarklet through a panel of its own
+(`web-account.js`). It is the same account everywhere.
 
 ## How it works
 
@@ -20,8 +21,13 @@ no sign-in and keeps the anonymous per-browser memory.
   function, `saurus_account_memory`. It runs as you (`SECURITY INVOKER`) and
   RLS limits every table to `auth.uid()`, so nobody can read or write another
   user's data. Your progress follows you to any computer where you sign in.
-- **Gemini** still goes through the `gemini` Edge Function. Signing in doesn't
-  change it.
+- **On the web** (`web-account.js`): the same `auth-service.js` runs in the
+  page. On the demo page the session is kept in its localStorage; on other
+  sites (the bookmarklet) only in memory for that tab, so nothing is left in
+  the site's storage. It loads only where no extension bridge exists; the
+  extension's session never reaches a page.
+- **Gemini** goes through the `gemini` Edge Function, with a pass from the
+  signed-in account (see `FREE_TIER.md`).
 
 ## Setup (Supabase dashboard)
 
@@ -34,7 +40,11 @@ no sign-in and keeps the anonymous per-browser memory.
    to sign up" on. For a live demo, turn **Confirm email** off so new accounts
    can log in immediately; with it on, people must click the link in the
    confirmation email first.
-3. Reload the extension in `chrome://extensions` and click the Saurus icon.
+3. **Authentication → URL Configuration:** set the Site URL to the demo page
+   (e.g. `https://eleonorabjornberg.github.io/saurus/demo.html`), so the
+   confirmation email's link lands somewhere useful; people then log in there
+   or in the extension.
+4. Reload the extension in `chrome://extensions` and click the Saurus icon.
 
 ## Tables
 
