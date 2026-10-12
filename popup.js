@@ -15,6 +15,17 @@ function request(type, payload) {
     resolve(response.data);
   }));
 }
+// CAPTCHA (Cloudflare Turnstile) in a frame from Saurus's site, only when a site key is set.
+const sbCfg=globalThis.SAURUS_SUPABASE||{};
+function captcha(){
+  if(!sbCfg.captchaSiteKey||!sbCfg.site)return null;
+  const src=new URL("captcha.html",sbCfg.site);src.search=new URLSearchParams({k:sbCfg.captchaSiteKey,o:location.origin}).toString();
+  const frame=document.createElement("iframe");frame.className="captcha";frame.title="Check that you’re not a robot";frame.src=src.href;
+  const box={el:frame,token:null,reset(){box.token=null;frame.src=src.href;}}; // tokens work once
+  addEventListener("message",(e)=>{if(e.source===frame.contentWindow&&e.data&&"saurusCaptcha" in e.data)box.token=e.data.saurusCaptcha||null;});
+  return box;
+}
+function needsCaptcha(cap){if(cap&&!cap.token){feedback.textContent="Please complete the check that you’re not a robot first.";return true;}return false;}
 function screen(html, compact=false) {
   document.body.classList.toggle("compact",compact);feedback.textContent="";
   content.innerHTML=html; // Static application templates only; never server/user text.
@@ -30,10 +41,12 @@ function passwordField(id,label,autocomplete) {
 }
 function form(mode) {
   const signup=mode==="signup";
-  screen(`<div class="card"><div class="eyebrow">${signup?"YOUR NEXT CHAPTER":"GOOD TO SEE YOU AGAIN"}</div><h1 id="heading">${signup?"A little curiosity.<br>A whole new world.":"Welcome back."}</h1><p>${signup?"Create your account. Your companion will remember the rest.":"Your dinosaur—and your progress—are waiting."}</p><form novalidate><div class="field"><label for="email">Email address</label><input id="email" type="email" name="email" autocomplete="email" placeholder="you@example.com" required aria-describedby="email-error"><p class="error" id="email-error"></p></div>${passwordField("password","Password",signup?"new-password":"current-password")}${signup?'<p class="hint" style="margin-top:-8px;margin-bottom:12px">At least 8 characters. Make it something only you know.</p>'+passwordField("confirm","Confirm password","new-password"):""}<button class="primary" type="submit">${signup?"Create Account":"Log In"}</button></form><p class="switch">${signup?"Already a companion?":"New around here?"} <button class="link" id="switch">${signup?"Log In":"Sign Up"}</button></p></div>`,true);
+  screen(`<div class="card"><div class="eyebrow">${signup?"YOUR NEXT CHAPTER":"GOOD TO SEE YOU AGAIN"}</div><h1 id="heading">${signup?"A little curiosity.<br>A whole new world.":"Welcome back."}</h1><p>${signup?"Create your account. Your companion will remember the rest.":"Your dinosaur—and your progress—are waiting."}</p><form novalidate><div class="field"><label for="email">Email address</label><input id="email" type="email" name="email" autocomplete="email" placeholder="you@example.com" required aria-describedby="email-error"><p class="error" id="email-error"></p></div>${passwordField("password","Password",signup?"new-password":"current-password")}${signup?'<p class="hint" style="margin-top:-8px;margin-bottom:12px">At least 8 characters. Make it something only you know.</p>'+passwordField("confirm","Confirm password","new-password"):""}<button class="primary" type="submit">${signup?"Create Account":"Log In"}</button></form>${signup?"":'<p class="switch"><button class="link" id="forgot">Forgot password?</button></p>'}<p class="switch">${signup?"Already a companion?":"New around here?"} <button class="link" id="switch">${signup?"Log In":"Sign Up"}</button></p></div>`,true);
   document.querySelectorAll(".reveal").forEach((button)=>button.onclick=()=>{const input=document.getElementById(button.dataset.target);const show=input.type==="password";input.type=show?"text":"password";button.textContent=show?"Hide":"Show";button.setAttribute("aria-pressed",String(show));button.setAttribute("aria-label",`${show?"Hide":"Show"} ${button.dataset.target} password`);});
   content.querySelectorAll("input").forEach(input=>input.addEventListener("input",()=>{input.removeAttribute("aria-invalid");document.getElementById(input.id+"-error").textContent="";}));
   document.querySelector("#switch").onclick=()=>form(signup?"signin":"signup");
+  document.querySelector("#forgot")?.addEventListener("click",()=>forgot(document.querySelector("#email").value));
+  const cap=captcha();if(cap)content.querySelector("form button[type=submit]").before(cap.el);
   content.querySelector("form").onsubmit=async(event)=>{
     event.preventDefault();feedback.textContent="";
     const email=document.querySelector("#email"),password=document.querySelector("#password"),confirm=document.querySelector("#confirm");
@@ -41,13 +54,52 @@ function form(mode) {
     if(signup) errors.push([confirm,confirm.value===password.value?"":"Your passwords don’t match yet."]);
     for(const [input,error] of errors){input.setAttribute("aria-invalid",String(!!error));document.getElementById(input.id+"-error").textContent=error;}
     const invalid=errors.find(([,error])=>error);if(invalid){invalid[0].focus();return;}
+    if(needsCaptcha(cap))return;
     const button=event.target.querySelector("button[type=submit]");button.disabled=true;button.classList.add("busy");
     try {
-      const state=await request(mode,{email:email.value.trim(),password:password.value});
+      const state=await request(mode,{email:email.value.trim(),password:password.value,captchaToken:cap?.token});
       password.value="";if(confirm)confirm.value="";
       if(state.verification){screen('<div class="center card"><div class="eyebrow">ONE LITTLE STEP</div><h1 id="heading">Check your inbox.</h1><p>If this address can be registered, you’ll receive a confirmation email. Follow its link, then return here to log in. Already have an account? You can log in now.</p><button id="login" class="primary">Back to Log In</button></div>');document.querySelector("#login").onclick=()=>form("signin");}
       else await route(state);
-    }catch(error){feedback.textContent=error.message;}finally{button.disabled=false;button.classList.remove("busy");}
+    }catch(error){feedback.textContent=error.message;}finally{button.disabled=false;button.classList.remove("busy");cap?.reset();}
+  };
+}
+// "Forgot password?": Supabase emails a link to reset.html on Saurus's site.
+function forgot(prefill=""){
+  screen(`<div class="card"><div class="eyebrow">IT HAPPENS TO EVERYONE</div><h1 id="heading">Forgot your password?</h1><p>Enter your email and we’ll send you a link to choose a new one.</p><form novalidate><div class="field"><label for="email">Email address</label><input id="email" type="email" autocomplete="email" placeholder="you@example.com" required></div><button class="primary" type="submit">Send reset link</button></form><p class="switch"><button class="link" id="back">Back to log in</button></p></div>`,true);
+  const email=document.querySelector("#email");email.value=prefill;
+  document.querySelector("#back").onclick=()=>form("signin");
+  const cap=captcha();if(cap)content.querySelector("form button[type=submit]").before(cap.el);
+  content.querySelector("form").onsubmit=async(event)=>{
+    event.preventDefault();feedback.textContent="";
+    if(!email.validity.valid||!email.value.trim()){feedback.textContent="Please enter a valid email address.";email.focus();return;}
+    if(needsCaptcha(cap))return;
+    const button=event.target.querySelector("button[type=submit]");button.disabled=true;
+    try{
+      await request("reset",{email:email.value.trim(),captchaToken:cap?.token});
+      screen('<div class="center card"><div class="eyebrow">ONE LITTLE STEP</div><h1 id="heading">Check your email.</h1><p>If an account uses this address, a link to choose a new password is on its way. It works once, for a short while.</p><button id="login" class="primary">Back to Log In</button></div>');
+      document.querySelector("#login").onclick=()=>form("signin");
+    }catch(error){feedback.textContent=error.message;}finally{button.disabled=false;cap?.reset();}
+  };
+}
+// Delete the account and everything Saurus keeps for it, after the password again.
+function deleteAccount(){
+  screen(`<div class="card"><div class="eyebrow">DELETE ACCOUNT</div><h1 id="heading">Delete your account?</h1><p>This removes your account and everything Saurus remembers for it: your levels, words, answers and conversation summaries, in every language. It can’t be undone.</p><form novalidate>${passwordField("password","Your password","current-password")}<button class="primary danger" type="submit">Delete my account</button></form><p class="switch"><button class="link" id="cancel">Keep my account</button></p></div>`,true);
+  document.querySelectorAll(".reveal").forEach((button)=>button.onclick=()=>{const input=document.getElementById(button.dataset.target);const show=input.type==="password";input.type=show?"text":"password";button.textContent=show?"Hide":"Show";button.setAttribute("aria-pressed",String(show));});
+  document.querySelector("#cancel").onclick=()=>route(account,false);
+  const cap=captcha();if(cap)content.querySelector("form button[type=submit]").before(cap.el);
+  content.querySelector("form").onsubmit=async(event)=>{
+    event.preventDefault();feedback.textContent="";
+    const password=document.querySelector("#password");
+    if(!password.value){feedback.textContent="Please enter your password.";password.focus();return;}
+    if(needsCaptcha(cap))return;
+    const button=event.target.querySelector("button[type=submit]");button.disabled=true;
+    try{
+      await request("delete",{password:password.value,captchaToken:cap?.token});
+      password.value="";account=null;
+      screen('<div class="center card"><div class="eyebrow">ALL CLEARED</div><h1 id="heading">Your account is deleted.</h1><p>Everything Saurus kept for it is gone. You’re welcome back any time.</p><button id="home" class="primary">Done</button></div>');
+      document.querySelector("#home").onclick=welcome;
+    }catch(error){feedback.textContent=error.message;}finally{button.disabled=false;cap?.reset();}
   };
 }
 function onboarding(){
@@ -64,12 +116,25 @@ async function route(state,autoLaunch=true){
   if(!state.user){welcome();return;}
   if(!state.profile?.onboarded){onboarding();return;}
   document.querySelector("#dinosaur").src=`assets/saurus-${state.profile.language}-1.png`;
-  screen('<div class="center card"><div class="eyebrow">YOUR ADVENTURE CONTINUES</div><h1 id="heading">Ready when you are.</h1><p id="identity"></p><button id="launch" class="primary">Open Saurus ↗</button><button id="logout" class="link">Sign out</button></div>');
+  screen('<div class="center card"><div class="eyebrow">YOUR ADVENTURE CONTINUES</div><h1 id="heading">Ready when you are.</h1><p id="identity"></p><p id="allowance" class="allowance" hidden></p><button id="launch" class="primary">Open Saurus ↗</button><button id="logout" class="link">Sign out</button><button id="delete" class="link quiet">Delete account</button></div>');
   document.querySelector("#identity").textContent=state.offline?"You’re still signed in. Your cloud progress will return when you’re online.":"Your companion remembers you. Let’s pick up where you left off.";
   document.querySelector("#launch").onclick=launch;
+  document.querySelector("#delete").onclick=deleteAccount;
   document.querySelector("#logout").onclick=async()=>{try{await request("signout");account=null;welcome();}catch(error){feedback.textContent=error.message;}};
   // Account view can be reached with popup.html#account; normal action opens immediately.
   if(autoLaunch && location.hash!=="#account") await launch();
+  allowance(); // still open: the account view, or Saurus couldn't launch here
+}
+// What is left of today's free allowance (from saurus_gemini_ticket()).
+async function allowance(){
+  const el=document.querySelector("#allowance");if(!el)return;
+  try{
+    const t=await request("ticket");
+    const s=Math.max(0,Number(t.voice_left)||0),pages=Math.max(0,Math.floor(Number(t.pages_left)||0));
+    const talk=s>=60?`${Math.floor(s/60)} min of conversation`:s>0?"under a minute of conversation":"no conversation time";
+    el.textContent=`Left today: ${talk} · ${pages} page translation${pages===1?"":"s"}.`;
+    el.hidden=false;
+  }catch(_){el.hidden=true;} // no free tier on this project yet
 }
 document.querySelector(".brand").onclick=(event)=>{event.preventDefault();account?.user?route(account,false):welcome();};
 screen('<div class="center"><h1 id="heading">Finding your companion…</h1><p>Just a moment.</p></div>');
