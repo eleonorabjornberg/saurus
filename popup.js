@@ -3,7 +3,11 @@ const content = document.querySelector("#content");
 const feedback = document.querySelector("#feedback");
 let chosenLanguage = "de";
 let account = null;
-const languages = { fr: ["🇫🇷", "French"], de: ["🇩🇪", "German"], es: ["🇪🇸", "Spanish"], sv: ["🇸🇪", "Swedish"], hi: ["🇮🇳", "Hindi"] };
+// Languages without their own pictures yet (it, pt, zh) show the plain Saurus.
+document.querySelector("#dinosaur").addEventListener("error", (e) => {
+  if (!/saurus-plain\.png$/.test(e.target.src)) e.target.src = "assets/saurus-plain.png";
+});
+const languages = { fr: ["🇫🇷", "French"], de: ["🇩🇪", "German"], es: ["🇪🇸", "Spanish"], sv: ["🇸🇪", "Swedish"], hi: ["🇮🇳", "Hindi"], it: ["🇮🇹", "Italian"], pt: ["🇧🇷", "Portuguese (Brazil)"], zh: ["🇨🇳", "Mandarin"] };
 function request(type, payload) {
   return new Promise((resolve,reject) => chrome.runtime.sendMessage({ channel:"saurus-account", type, payload }, (response) => {
     if(chrome.runtime.lastError) return reject(new Error(chrome.runtime.lastError.message));

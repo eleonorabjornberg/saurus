@@ -24,7 +24,7 @@
   const script = document.currentScript && document.currentScript.src;
   const base = script ? new URL(".", script).href : new URL(".", location.href).href;
   const ownSite = new URL(base).origin === location.origin;
-  const LANGUAGES = { fr: ["🇫🇷", "French"], de: ["🇩🇪", "German"], es: ["🇪🇸", "Spanish"], sv: ["🇸🇪", "Swedish"], hi: ["🇮🇳", "Hindi"] };
+  const LANGUAGES = { fr: ["🇫🇷", "French"], de: ["🇩🇪", "German"], es: ["🇪🇸", "Spanish"], sv: ["🇸🇪", "Swedish"], hi: ["🇮🇳", "Hindi"], it: ["🇮🇹", "Italian"], pt: ["🇧🇷", "Portuguese (Brazil)"], zh: ["🇨🇳", "Mandarin"] };
 
   // Storage with chrome.storage.local's shape, as auth-service.js expects.
   const memoryStore = new Map();
