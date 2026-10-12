@@ -38,7 +38,7 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   const trustedUI = sender.id === chrome.runtime.id && String(sender.url || "").split(/[?#]/)[0] === chrome.runtime.getURL("popup.html");
   (async () => {
     if (sender.id !== chrome.runtime.id) throw new Error("Untrusted sender.");
-    if (["signin", "signup", "signout"].includes(message.type) && !trustedUI) throw new Error("Open the Saurus popup to manage your account.");
+    if (["signin", "signup", "signout", "reset", "delete"].includes(message.type) && !trustedUI) throw new Error("Open the Saurus popup to manage your account.");
     if (message.type === "memory" && !trustedUI && !message.payload?.expectedUserId) throw new Error("Open Saurus again to restore your account.");
     if (message.type === "open") {
       try { await chrome.action.openPopup(); }

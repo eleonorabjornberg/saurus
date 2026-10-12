@@ -1,8 +1,9 @@
 # Saurus accounts
 
-Account sign-in is by Mahdi Yusuf. In the Chrome extension, Saurus asks you
-to sign in first. The public demo page (`demo.html`, GitHub Pages, phones) has
-no sign-in and keeps the anonymous per-browser memory.
+Account sign-in is by Mahdi Yusuf. Saurus asks you to sign in first: in the
+Chrome extension through its popup, and on the demo page (`demo.html`, GitHub
+Pages, phones) and the bookmarklet through a panel of its own
+(`web-account.js`). It is the same account everywhere.
 
 ## How it works
 
@@ -20,8 +21,25 @@ no sign-in and keeps the anonymous per-browser memory.
   function, `saurus_account_memory`. It runs as you (`SECURITY INVOKER`) and
   RLS limits every table to `auth.uid()`, so nobody can read or write another
   user's data. Your progress follows you to any computer where you sign in.
-- **Gemini** still goes through the `gemini` Edge Function. Signing in doesn't
-  change it.
+- **On the web** (`web-account.js`): the same `auth-service.js` runs in the
+  page. On the demo page the session is kept in its localStorage; on other
+  sites (the bookmarklet) only in memory for that tab, so nothing is left in
+  the site's storage. It loads only where no extension bridge exists; the
+  extension's session never reaches a page.
+- **Forgot password:** "Forgot password?" on the log-in screen (popup and web)
+  emails a link to `reset.html` on Saurus's site, where people choose a new
+  password. The page keeps the link's short-lived session in memory only and
+  signs it out afterwards; people then log in as usual.
+- **Delete account:** in the popup's account view (right-click the icon →
+  **Options**) or the web panel's Account view. After the password is checked
+  again, `saurus_delete_account()` deletes the user, and with it every row
+  Saurus keeps for them (all account tables, usage and passes cascade).
+- **CAPTCHA (optional):** with a Cloudflare Turnstile site key in
+  `supabase-config.js`, sign-up, log-in, reset and delete show a check in a
+  small frame from `captcha.html` on Saurus's site (the extension can't load
+  Cloudflare's script itself) and send its one-time token to Supabase.
+- **Gemini** goes through the `gemini` Edge Function, with a pass from the
+  signed-in account (see `FREE_TIER.md`).
 
 ## Setup (Supabase dashboard)
 
@@ -34,7 +52,31 @@ no sign-in and keeps the anonymous per-browser memory.
    to sign up" on. For a live demo, turn **Confirm email** off so new accounts
    can log in immediately; with it on, people must click the link in the
    confirmation email first.
-3. Reload the extension in `chrome://extensions` and click the Saurus icon.
+3. **Authentication → URL Configuration:** set the Site URL to the demo page
+   (e.g. `https://eleonorabjornberg.github.io/saurus/demo.html`), so the
+   confirmation email's link lands somewhere useful; people then log in there
+   or in the extension.
+4. **Authentication → URL Configuration → Redirect URLs:** add
+   `https://eleonorabjornberg.github.io/saurus/reset.html`, so password-reset
+   links may land there. (`site` in `supabase-config.js` must point at the
+   same site.)
+5. **SQL Editor:** run `supabase/migrations/20261012100000_saurus_delete_account.sql`
+   (account deletion). Safe to re-run.
+6. **Emails:** Supabase's built-in sender only sends a few emails an hour.
+   Before launch, set up your own under **Authentication → Emails → SMTP
+   Settings** (Resend, Postmark, SES…), and adjust the "Reset password" and
+   "Confirm signup" templates there.
+7. **CAPTCHA (optional, recommended before launch):**
+   1. Cloudflare dashboard → **Turnstile** → add a widget for the hostname
+      `eleonorabjornberg.github.io`. Copy the site key and the secret key.
+   2. Put the **site key** (public) in `supabase-config.js` as
+      `captchaSiteKey`, merge, and wait for GitHub Pages to publish.
+   3. Reload the extension, so its popup has the key too.
+   4. Then Supabase → **Authentication → Attack Protection → Enable CAPTCHA
+      protection**, provider Turnstile, paste the **secret key**. From this
+      moment Supabase refuses sign-up, log-in and reset without a check, so
+      do this step last.
+8. Reload the extension in `chrome://extensions` and click the Saurus icon.
 
 ## Tables
 

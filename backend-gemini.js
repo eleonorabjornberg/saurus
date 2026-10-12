@@ -18,6 +18,9 @@
   // A local key wins; otherwise the Supabase Edge Function, if switched on.
   const viaSupabase = !cfg.geminiApiKey && !cfg.apiBase && sbCfg.gemini && sbCfg.url;
   if (!cfg.geminiApiKey && !cfg.apiBase && !viaSupabase) return; // nothing configured: the mock runs
+  // The Supabase function serves signed-in accounts only (free-tier limits are
+  // per account). No account bridge on this page: the offline mock runs.
+  if (viaSupabase && !(window.SaurusAccount && window.SaurusAccount.ticket)) return;
 
   const KEY = encodeURIComponent(cfg.geminiApiKey || "");
   const LIVE_MODEL = cfg.liveModel || "gemini-3.8-live";
@@ -31,6 +34,52 @@
   const WS_URL = API.replace(/^http/, "ws") +
     "/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + KEY;
   const REST_URL = (model) => `${API}/v1beta/models/${model}:generateContent?key=${KEY}`;
+
+  // Free tier (Supabase function only): a short-lived pass from the signed-in
+  // account goes with every call; the function counts usage against it.
+  let pass = null; // {ticket, until}
+  let passing = null; // the pass request in flight, shared by parallel calls
+  async function ticket() {
+    if (!viaSupabase) return "";
+    if (pass && Date.now() < pass.until - 60000) return pass.ticket;
+    if (!passing) {
+      passing = window.SaurusAccount.ticket().then((t) => {
+        pass = { ticket: t.ticket, until: Date.parse(t.expires_at) || Date.now() + 9 * 60000 };
+        return pass.ticket;
+      }).finally(() => { passing = null; });
+    }
+    return passing;
+  }
+  // A page counts once per language and level: Saurus translates it in many
+  // small batches, and only the first request of a new translation says so.
+  const pagesSeen = new Set();
+  let pageDue = false;
+  function newPage(language, level) {
+    const key = `${location.href}|${language}|${level}`;
+    if (!pagesSeen.has(key)) { pagesSeen.add(key); pageDue = true; }
+  }
+  async function restHeaders(page) {
+    const h = { "Content-Type": "application/json" };
+    if (viaSupabase) {
+      h["x-saurus-ticket"] = await ticket();
+      if (page && pageDue) { pageDue = false; h["x-saurus-page"] = "1"; }
+    }
+    return h;
+  }
+  // POST to Gemini; with a stale pass (401), fetch a new one and try once more.
+  async function post(model, payload, page) {
+    const send = async () => fetch(REST_URL(model), { method: "POST", headers: await restHeaders(page), body: JSON.stringify(payload) });
+    let res = await send();
+    if (res.status === 401 && viaSupabase) { pass = null; res = await send(); }
+    return res;
+  }
+  // The function's own refusals (signed out, daily limit): show its words as they are.
+  const refused = (res, body) => viaSupabase && (res.status === 401 || (res.status === 429 && body.error && body.error.status === "SAURUS_LIMIT"));
+  // WebSocket close codes the function uses to explain itself.
+  const LIMIT = {
+    4001: "Please sign in to Saurus to keep talking",
+    4002: "You've used today's free conversation time. Page translation still works, and I can talk again tomorrow",
+  };
 
   const LANG = { fr: "French", de: "German", es: "Spanish", sv: "Swedish", hi: "Hindi", it: "Italian", pt: "Brazilian Portuguese", zh: "Mandarin Chinese" };
   // The learner's own language (for the hatchling mix), from the browser.
@@ -156,14 +205,11 @@
   async function flash(parts) {
     const model = textIdx;
     const generationConfig = THINKING[thinkIdx] ? { thinkingConfig: THINKING[thinkIdx] } : {};
-    const res = await fetch(REST_URL(TEXT_MODELS[model]), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig }),
-    });
+    const res = await post(TEXT_MODELS[model], { contents: [{ role: "user", parts }], generationConfig });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = (body.error && body.error.message) || res.statusText;
+      if (refused(res, body)) throw new Error(msg);
       if (res.status === 400 && THINKING[thinkIdx] && /think/i.test(msg)) { thinkIdx++; return flash(parts); }
       if (model < TEXT_MODELS.length - 1 && (res.status === 404 || res.status === 403)) { if (textIdx === model) textIdx++; return flash(parts); }
       throw new Error(`Gemini ${res.status}: ${msg}`);
@@ -374,8 +420,9 @@
     close();
     const extras = extrasOk;
     const resumeWith = extras && opts.resume ? resumeHandle : null;
-    return new Promise((resolve, reject) => {
-      const sock = new WebSocket(WS_URL);
+    return ticket().then((t) => new Promise((resolve, reject) => {
+      close(); // another connect() may have opened a socket while the pass was fetched
+      const sock = new WebSocket(t ? WS_URL.replace(/\?key=.*$/, "?ticket=" + encodeURIComponent(t)) : WS_URL);
       ws = sock;
       let ready = false;
       sock.onopen = () => {
@@ -411,6 +458,12 @@
         const why = `Gemini Live closed (${ev.code}${ev.reason ? ": " + ev.reason : ""})`;
         if (sock !== ws) return;
         ws = null; live = false;
+        if (LIMIT[ev.code]) { // signed out, or today's free allowance is used up: say so, don't retry
+          pass = null;
+          if (!ready) reject(new Error(LIMIT[ev.code]));
+          else { running = false; setState("idle"); emit("transcript", { who: "saurus", text: `(${LIMIT[ev.code]}.)`, final: true }); }
+          return;
+        }
         if (!ready && resumeWith) resumeHandle = null; // stale handle: next try starts fresh
         else if (!ready && extras && extrasOk) {
           extrasOk = false; // retry once without the extras
@@ -421,7 +474,7 @@
         if (!ready) reject(new Error(why));
         else if (running) reconnect(why);
       };
-    });
+    }));
   }
 
   // Sessions can end on their own (e.g. Supabase's Edge Function time limit,
@@ -448,6 +501,7 @@
   }
 
   function reconnect(why) {
+    if (Object.values(LIMIT).includes(why)) { setState("idle"); emit("transcript", { who: "saurus", text: `(${why}.)`, final: true }); return; }
     if (reconnects >= 3) { setState("idle"); emit("error", { message: why }); return; }
     reconnects++;
     finishUser(); finishSaurus(true);
@@ -698,14 +752,11 @@
     const mode = thinkIdx;
     if (THINKING[mode]) generationConfig.thinkingConfig = THINKING[mode];
     const model = textIdx;
-    const res = await fetch(REST_URL(TEXT_MODELS[model]), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
-    });
+    const res = await post(TEXT_MODELS[model], { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }, true);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = (body.error && body.error.message) || res.statusText;
+      if (refused(res, body)) throw new Error(msg);
       if (res.status === 400 && THINKING[mode] && /think/i.test(msg)) { // this model rejects that setting
         if (thinkIdx === mode) thinkIdx = mode + 1;
         return out.concat(await translateBatch(todo, language, level));
@@ -782,6 +833,7 @@
       // batches of ~25 blocks in parallel keep it quick on long pages
       const batches = [];
       for (let i = 0; i < blocks.length; i += 25) batches.push(blocks.slice(i, i + 25));
+      newPage(language, level);
       const results = await Promise.all(batches.map((b) => translateBatch(b, language, level)));
       setTimeout(done, 0); // after Saurus has put this batch on the page
       return results.flat();
