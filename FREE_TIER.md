@@ -20,7 +20,15 @@ Change the numbers in `saurus_limits()` in
 2. `backend-gemini.js` sends the pass with every call: `?ticket=` for voice,
    the `x-saurus-ticket` header for text.
 3. The function resolves the pass to a user, refuses when the day's allowance
-   is used up, and records usage.
+   is used up, and records usage. A pass is remembered for five seconds per
+   function instance, so a page translated in several batches costs one
+   lookup.
+4. Voice must ask for audio replies only (`responseModalities: ["AUDIO"]`),
+   because the allowance is counted in audio. Every 15 seconds of audio is
+   recorded, and the answer says what is left across all of the user's
+   sessions, so two tabs talking at once can't each spend the whole day.
+5. A page counts once per address, language and level: the first translation
+   request sends `x-saurus-page: 1`, the other batches don't.
 
 Voice closes with code 4001 (no valid pass) or 4002 (limit reached). Text
 returns 401 or 429. Saurus explains either in its speech bubble.
@@ -35,8 +43,16 @@ returns 401 or 429. Saurus explains either in its speech bubble.
 
 Rollback without redeploying: set the function secret `SAURUS_OPEN=1`.
 
+## Tests
+
+`deno test --allow-net --allow-env supabase/functions/gemini/index_test.ts`
+runs the function against local stand-ins for Supabase and Gemini.
+
 ## Known gaps
 
 - The hosted demo page and the bookmarklet have no sign-in, so they now run
   on the offline mock. They need a web sign-in to use the live tutor.
 - Usage is estimated from message sizes, not billed tokens.
+- Limits are checked before a call and recorded after, so a burst of parallel
+  text calls, or about 15 seconds per open voice session, can go slightly
+  over the day's allowance.
