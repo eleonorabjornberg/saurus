@@ -2,8 +2,8 @@
  * bookmarklet.js — Saurus on any page without installing anything.
  * The bookmark (see demo.html) loads this file from GitHub Pages; it loads
  * Saurus's scripts from the same place and opens it. Clicking the bookmark
- * again toggles Saurus. Uses the anonymous per-browser memory (sign-in is
- * in the extension). Some sites block outside scripts (strict CSP); there,
+ * again toggles Saurus. Saurus asks you to sign in (web-account.js);
+ * on other sites the session is kept for that tab only. Some sites block outside scripts (strict CSP); there,
  * use the extension or the demo page.
  */
 (function () {
@@ -11,7 +11,7 @@
   const toggle = () => window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", key: "s", altKey: true, bubbles: true }));
   if (document.documentElement.hasAttribute("data-saurus-loaded")) { toggle(); return; }
   const base = (document.currentScript && document.currentScript.src) || "https://eleonorabjornberg.github.io/saurus/bookmarklet.js";
-  const files = ["config.js", "supabase-config.js", "backend.js", "backend-gemini.js", "backend-mock.js", "saurus.js"];
+  const files = ["config.js", "supabase-config.js", "auth-service.js", "web-account.js", "backend.js", "backend-gemini.js", "backend-mock.js", "saurus.js"];
   (function next(i) {
     if (i >= files.length) { setTimeout(toggle, 50); return; }
     const s = document.createElement("script");
